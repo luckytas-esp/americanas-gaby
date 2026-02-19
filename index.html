@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1" name="viewport"/>
-<title>Mini Gestor Pádel · Jornada (Pistas + Parejas aleatorias + Timer)</title>
+<title>Americanas Gaby</title>
 <!-- ✅ Tailwind CSS desde CDN (requisito) -->
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
@@ -16,7 +16,7 @@
 <div class="max-w-6xl mx-auto p-4 sm:p-6">
 <header class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
 <div>
-<h1 class="text-2xl sm:text-3xl font-bold">Mini Gestor de Jornada de Pádel</h1>
+<h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight flex items-center gap-2"><img src="assets/icons/icon-192.png" alt="Americanas Gaby" class="w-7 h-7 rounded-md"/>Americanas Gaby</h1>
 <p class="text-slate-600">Pistas simultáneas · parejas IZQ–DER · sin repetir parejas · ranking final</p>
 </div>
 <div class="flex gap-2"><button class="px-3 py-2 rounded-xl bg-sky-500 text-white shadow-sm hover:bg-sky-600 text-sm hidden" id="btnInstall">Instalar</button>
@@ -136,11 +136,18 @@ Cris,C" rows="4"></textarea>
 <label class="block text-sm font-medium">Rondas (nº de turnos)</label>
 <input class="w-full rounded-xl border px-3 py-2" id="matchCount" min="1" placeholder="Ej: 6" step="1" type="number"/>
 <p class="text-xs text-slate-500 mt-1">Cada ronda genera <b>pistas</b> partidos simultáneos.</p>
+
+</div>
+<div>
+<label class="block text-sm font-medium">Duración total de la jornada (min)</label>
+<input class="w-full rounded-xl border px-3 py-2" id="totalDurationMin" min="10" step="5" type="number" value="90"/>
+<p class="text-xs text-slate-500 mt-1">Se reparte entre las rondas.</p>
 </div>
 <div class="rounded-2xl border bg-slate-50 p-3">
+
 <div class="text-sm text-slate-600">Duración por ronda</div>
 <div class="text-2xl font-bold mono" id="matchDurationLabel">--:--</div>
-<div class="text-xs text-slate-500">90 min / nº de rondas</div>
+<div class="text-xs text-slate-500"><span id="totalDurationHint">90</span> min / nº de rondas</div>
 </div>
 <div class="md:col-span-4">
 <label class="block text-sm font-medium">Selecciona jugadoras para esta jornada</label>
@@ -187,6 +194,7 @@ Cris,C" rows="4"></textarea>
 <button class="px-3 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 text-sm" id="btnStart">Iniciar</button>
 <button class="px-3 py-2 rounded-xl bg-white border hover:bg-slate-50 text-sm" id="btnPause">Pausar</button>
 <button class="px-3 py-2 rounded-xl bg-white border hover:bg-slate-50 text-sm" id="btnResetTimer">Reiniciar</button>
+<button class="px-3 py-2 rounded-xl bg-rose-600 text-white hover:bg-rose-700 text-sm" id="btnFinishRound">Finalizar ronda</button>
 </div>
 </div>
 </div>
@@ -318,6 +326,7 @@ Cris,C" rows="4"></textarea>
     </footer>
 </div>
 <script>
+
     /***********************************************************************
      * PASO A PASO (muy comentado):
      *
@@ -431,6 +440,7 @@ Cris,C" rows="4"></textarea>
       renderPlanDerived();
       renderSchedule();
       renderCurrentRound();
+      restoreTimerFromStorage();
       renderRanking();
       renderHistory();
       renderSummary();
@@ -489,12 +499,16 @@ Cris,C" rows="4"></textarea>
     }
 
     function renderPlanDerived() {
-      const rounds = Number($("#matchCount").value || 0);
-      const courts = Number($("#courtCount").value || 0);
-      $("#matchDurationLabel").textContent = rounds > 0 ? fmtMMSS(Math.floor((90*60)/rounds)) : "--:--";
-      const needed = courts > 0 ? 4 * courts : 0;
-      $("#needPlayersHint").textContent = needed ? `Mínimo: ${needed} (4 × ${courts} pistas)` : "Mínimo: --";
-    }
+  const rounds = Number($("#matchCount").value || 0);
+  const courts = Number($("#courtCount").value || 0);
+  const totalMin = Number($("#totalDurationMin").value || 90);
+
+  $("#matchDurationLabel").textContent = rounds > 0 ? fmtMMSS(Math.floor((totalMin * 60) / rounds)) : "--:--";
+  $("#totalDurationHint").textContent = String(totalMin);
+
+  const needed = courts > 0 ? 4 * courts : 0;
+  $("#needPlayersHint").textContent = needed ? `Mínimo: ${needed} (4 × ${courts} pistas)` : "Mínimo: --";
+}
 
     function renderSchedule() {
       const j = getCurrentJournal();
@@ -907,7 +921,8 @@ Cris,C" rows="4"></textarea>
       const neededPerRound = 4 * courtCount;
       if (includeCount < neededPerRound) return planMessage("error", `Con ${courtCount} pistas necesitas al menos ${neededPerRound} jugadoras (4×pistas).`);
 
-      const durationSec = Math.floor((90 * 60) / roundCount);
+      const totalMin = Number($("#totalDurationMin").value || 90);
+      const durationSec = Math.floor((totalMin * 60) / roundCount);
       $("#matchDurationLabel").textContent = fmtMMSS(durationSec);
 
       let j = getCurrentJournal();
@@ -1063,40 +1078,135 @@ const includedPlayers = includeIds.map(getPlayer).filter(Boolean);
     }
 
     // ===== Timer =====
-    let timerRemaining = 0;
-    let timerInterval = null;
+    // -------------------- Temporizador (robusto: basado en timestamps) --------------------
+let timerRemaining = 0;          // segundos (último valor calculado cuando está pausado)
+let timerEndAt = null;           // timestamp ms cuando está corriendo
+let timerInterval = null;        // intervalo de refresco UI
 
-    function setTimerSeconds(sec) {
-      timerRemaining = Math.max(0, Math.floor(sec));
-      $("#timerLabel").textContent = fmtMMSS(timerRemaining);
-    }
+function getTimerStore() {
+  const j = getCurrentJournal();
+  if (!j) return null;
+  if (!j.timer) j.timer = { running: false, endAt: null, remaining: 0 };
+  return j.timer;
+}
 
-    function startTimer() {
-      const j = getCurrentJournal();
-      if (!j || !j.schedule?.length) return showMatchMessage("error","No hay jornada activa.");
-      if (timerInterval) return;
-      if (timerRemaining <= 0) setTimerSeconds(j.durationSec || 0);
+function persistTimer() {
+  const store = getTimerStore();
+  if (!store) return;
+  store.running = Boolean(timerEndAt);
+  store.endAt = timerEndAt;
+  store.remaining = timerRemaining;
+  save();
+}
 
-      timerInterval = setInterval(() => {
-        timerRemaining--;
-        $("#timerLabel").textContent = fmtMMSS(timerRemaining);
-        if (timerRemaining <= 0) { stopTimer(); onTimerFinished(); }
-      }, 1000);
+function calcRemaining() {
+  if (timerEndAt) {
+    const sec = Math.ceil((timerEndAt - Date.now()) / 1000);
+    return Math.max(0, sec);
+  }
+  return Math.max(0, Math.floor(timerRemaining));
+}
 
-      showMatchMessage("ok","Temporizador iniciado.");
-    }
+function setTimerSeconds(sec) {
+  timerRemaining = Math.max(0, Math.floor(sec));
+  $("#timerLabel").textContent = fmtMMSS(timerRemaining);
+  persistTimer();
+}
 
-    function stopTimer() { if (timerInterval) { clearInterval(timerInterval); timerInterval = null; } }
-    function pauseTimer() { stopTimer(); showMatchMessage("info","Temporizador pausado."); }
+function ensureTimerInterval() {
+  if (timerInterval) return;
+  timerInterval = setInterval(() => {
+    const rem = calcRemaining();
+    timerRemaining = rem;
+    $("#timerLabel").textContent = fmtMMSS(rem);
 
-    function resetTimer() {
-      const j = getCurrentJournal();
+    if (timerEndAt && rem <= 0) {
       stopTimer();
-      setTimerSeconds(j?.durationSec || 0);
-      showMatchMessage("info","Temporizador reiniciado.");
+      onTimerFinished();
     }
+  }, 250);
+}
 
-    function onTimerFinished() { playBeep(); showMatchMessage("ok","Tiempo finalizado. Ya puedes introducir resultados."); disableResultsUI(false); }
+function startTimer() {
+  const j = getCurrentJournal();
+  if (!j || !j.schedule?.length) return showMatchMessage("error","No hay jornada activa.");
+
+  // Si ya está corriendo, no reiniciamos.
+  if (timerEndAt) return;
+
+  if (timerRemaining <= 0) setTimerSeconds(j.durationSec || 0);
+  timerEndAt = Date.now() + (timerRemaining * 1000);
+  ensureTimerInterval();
+  persistTimer();
+  showMatchMessage("ok","Temporizador iniciado.");
+}
+
+function stopTimer() {
+  // Congela el valor actual y borra el endAt (pausa)
+  if (timerEndAt) {
+    timerRemaining = calcRemaining();
+    timerEndAt = null;
+    persistTimer();
+  }
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+}
+
+function pauseTimer() { stopTimer(); showMatchMessage("info","Temporizador pausado."); }
+
+function resetTimer() {
+  const j = getCurrentJournal();
+  stopTimer();
+  timerEndAt = null;
+  setTimerSeconds(j?.durationSec || 0);
+  showMatchMessage("info","Temporizador reiniciado.");
+}
+
+// Finaliza la ronda manualmente (por ejemplo, si termináis antes) y desbloquea resultados.
+function finishRoundEarly() {
+  stopTimer();
+  timerEndAt = null;
+  setTimerSeconds(0);
+  onTimerFinished();
+}
+
+// Si vuelves a la app tras estar en segundo plano, recalculamos la UI.
+document.addEventListener("visibilitychange", () => {
+  const rem = calcRemaining();
+  timerRemaining = rem;
+  $("#timerLabel").textContent = fmtMMSS(rem);
+  if (timerEndAt) ensureTimerInterval();
+});
+
+function restoreTimerFromStorage() {
+  const store = getTimerStore();
+  const j = getCurrentJournal();
+  if (!store || !j) return;
+
+  // Si cambia la ronda, reiniciamos el timer (evita arrastrar un timer de otra ronda).
+  const roundKey = `r${j.currentRoundIndex || 0}`;
+  if (store.roundKey && store.roundKey !== roundKey) {
+    store.running = false;
+    store.endAt = null;
+    store.remaining = j.durationSec || 0;
+  }
+  store.roundKey = roundKey;
+
+  timerEndAt = store.running && store.endAt ? store.endAt : null;
+  timerRemaining = (typeof store.remaining === "number") ? store.remaining : (j.durationSec || 0);
+
+  const rem = calcRemaining();
+  timerRemaining = rem;
+  $("#timerLabel").textContent = fmtMMSS(rem);
+
+  if (timerEndAt && rem > 0) ensureTimerInterval();
+  if (timerEndAt && rem <= 0) { stopTimer(); onTimerFinished(); }
+}
+
+function onTimerFinished() {
+  playBeep();
+  showMatchMessage("ok","Tiempo finalizado. Ya puedes introducir resultados.");
+  disableResultsUI(false);
+}
 
     function disableResultsUI(disabled) {
       $$(".pairPointsInput").forEach(inp => inp.disabled = disabled);
@@ -1183,24 +1293,30 @@ for (const [pid, pts] of pointsByPlayer.entries()) {
     }
 
     function goNextRound() {
-      const j = getCurrentJournal();
-      if (!j || !j.schedule?.length) return;
-      stopTimer();
+  const j = getCurrentJournal();
+  if (!j || !j.schedule?.length) return;
 
-      const idx = j.currentRoundIndex || 0;
-      if (idx + 1 >= j.schedule.length) {
-        showMatchMessage("ok","Jornada finalizada. Mira el ranking.");
-        setTab("ranking");
-        save();
-        return;
-      }
+  // Paramos y reseteamos el timer de la ronda actual
+  stopTimer();
 
-      j.currentRoundIndex = idx + 1;
-      setTimerSeconds(j.durationSec || 0);
-      save();
-      disableResultsUI(true);
-      startTimer();
-    }
+  const idx = j.currentRoundIndex || 0;
+  if (idx + 1 >= j.schedule.length) {
+    showMatchMessage("ok","Jornada finalizada. Mira el ranking.");
+    setTab("ranking");
+    save();
+    return;
+  }
+
+  j.currentRoundIndex = idx + 1;
+
+  // Nuevo timer para la nueva ronda
+  timerEndAt = null;
+  setTimerSeconds(j.durationSec || 0);
+  disableResultsUI(true);
+  save();
+
+  startTimer();
+}
 
     function countMatchesForPlayer(playerId) {
       let count = 0;
@@ -1404,6 +1520,7 @@ for (const [pid, pts] of pointsByPlayer.entries()) {
       $("#btnStart").addEventListener("click", startTimer);
       $("#btnPause").addEventListener("click", pauseTimer);
       $("#btnResetTimer").addEventListener("click", resetTimer);
+      $("#btnFinishRound").addEventListener("click", finishRoundEarly);
 
       $("#btnSaveResult").addEventListener("click", saveResultForCurrentRound);
       $("#btnNextMatch").addEventListener("click", goNextRound);
@@ -1529,6 +1646,7 @@ document.getElementById("fileImport")?.addEventListener("change", async (e) => {
   // Permite volver a importar el mismo archivo si hace falta
   e.target.value = "";
 });
+
 </script>
 </body>
 </html>
