@@ -1,0 +1,28 @@
+{
+  "name": "Americanas Gaby",
+  "short_name": "Americanas Gaby",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ecfeff",
+  "theme_color": "#38bdf8",
+  "description": "Gestor de jornada de pádel (local): pistas, parejas aleatorias y ranking.",
+  "icons": [
+    {
+      "src": "assets/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "assets/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "assets/icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

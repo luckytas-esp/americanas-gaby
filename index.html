@@ -1,0 +1,1534 @@
+<!DOCTYPE html>
+
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width,initial-scale=1" name="viewport"/>
+<title>Mini Gestor Pádel · Jornada (Pistas + Parejas aleatorias + Timer)</title>
+<!-- ✅ Tailwind CSS desde CDN (requisito) -->
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+    .tab-active { background: #0f172a; color: white; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+  </style>
+<link href="manifest.json" rel="manifest"/><meta content="#38bdf8" name="theme-color"/><meta content="yes" name="apple-mobile-web-app-capable"/><meta content="Americanas Gaby" name="apple-mobile-web-app-title"/><link href="assets/icons/apple-touch-icon.png" rel="apple-touch-icon"/></head>
+<body class="bg-slate-50 text-slate-900">
+<div class="max-w-6xl mx-auto p-4 sm:p-6">
+<header class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+<div>
+<h1 class="text-2xl sm:text-3xl font-bold">Mini Gestor de Jornada de Pádel</h1>
+<p class="text-slate-600">Pistas simultáneas · parejas IZQ–DER · sin repetir parejas · ranking final</p>
+</div>
+<div class="flex gap-2"><button class="px-3 py-2 rounded-xl bg-sky-500 text-white shadow-sm hover:bg-sky-600 text-sm hidden" id="btnInstall">Instalar</button>
+<button class="px-3 py-2 rounded-xl bg-white border shadow-sm hover:bg-slate-50 text-sm" id="btnImport">Importar (JSON)</button><button class="px-3 py-2 rounded-xl bg-white border shadow-sm hover:bg-slate-50 text-sm" id="btnExport">
+          Exportar (JSON)
+        </button>
+<button class="px-3 py-2 rounded-xl bg-white border shadow-sm hover:bg-slate-50 text-sm" id="btnExportCSV">
+          Exportar (Excel/CSV)
+        </button>
+<button class="px-3 py-2 rounded-xl bg-rose-600 text-white shadow-sm hover:bg-rose-700 text-sm" id="btnReset">
+          Reset (borrar todo)
+        </button>
+<input accept="application/json,.json" class="hidden" id="fileImport" type="file"/></div>
+</header>
+<nav class="mt-6 bg-white border rounded-2xl shadow-sm p-2">
+<div class="flex flex-wrap gap-2">
+<button class="tab px-3 py-2 rounded-xl text-sm font-medium hover:bg-slate-100" data-tab="setup">1) Jugadoras</button>
+<button class="tab px-3 py-2 rounded-xl text-sm font-medium hover:bg-slate-100" data-tab="plan">2) Jornada</button>
+<button class="tab px-3 py-2 rounded-xl text-sm font-medium hover:bg-slate-100" data-tab="match">3) Partido</button>
+<button class="tab px-3 py-2 rounded-xl text-sm font-medium hover:bg-slate-100" data-tab="ranking">4) Ranking</button>
+<button class="tab px-3 py-2 rounded-xl text-sm font-medium hover:bg-slate-100" data-tab="history">5) Historial</button>
+</div>
+</nav>
+<!-- TAB 1: Jugadoras -->
+<section class="tab-panel mt-6" id="tab-setup">
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+<div class="bg-white border rounded-2xl shadow-sm p-4">
+<h2 class="text-lg font-semibold">Añadir jugadora</h2>
+<p class="text-sm text-slate-600 mt-1">
+            Indica nombre y rol: <b>Izquierda</b>, <b>Derecha</b> o <b>Comodín</b>.
+          </p>
+<div class="mt-4 space-y-3">
+<div>
+<label class="block text-sm font-medium">Nombre</label>
+<input class="w-full rounded-xl border px-3 py-2" id="playerName" placeholder="Ej: Laura"/>
+</div>
+<div>
+<label class="block text-sm font-medium">Rol</label>
+<select class="w-full rounded-xl border px-3 py-2" id="playerRole">
+<option value="L">IZQUIERDA</option>
+<option value="R">DERECHA</option>
+<option value="C">COMODÍN</option>
+</select>
+</div>
+<button class="w-full px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm" id="btnAddPlayer">
+              Añadir
+            </button>
+<details class="rounded-xl border bg-slate-50 p-3">
+<summary class="cursor-pointer text-sm font-semibold">Importación rápida (opcional)</summary>
+<p class="text-sm text-slate-600 mt-2">
+                Una jugadora por línea: <span class="mono">Nombre,Rol</span> (Rol: L/R/C)
+              </p>
+<textarea class="w-full mt-2 rounded-xl border px-3 py-2 mono text-sm" id="bulkImport" placeholder="Ana,L
+Bea,R
+Cris,C" rows="4"></textarea>
+<div class="flex gap-2 mt-2">
+<button class="px-3 py-2 rounded-xl bg-white border shadow-sm hover:bg-slate-100 text-sm" id="btnBulkImport">
+                  Importar
+                </button>
+<button class="px-3 py-2 rounded-xl bg-white border shadow-sm hover:bg-slate-100 text-sm" id="btnBulkClear">
+                  Limpiar
+                </button>
+</div>
+</details>
+</div>
+</div>
+<div class="bg-white border rounded-2xl shadow-sm p-4 lg:col-span-2">
+<div class="flex items-center justify-between gap-2">
+<h2 class="text-lg font-semibold">Listado de jugadoras</h2>
+<div class="text-sm text-slate-600" id="playersCount">0 jugadoras</div>
+</div>
+<div class="mt-3 overflow-auto border rounded-2xl">
+<table class="min-w-full text-sm">
+<thead class="bg-slate-100 text-slate-700">
+<tr>
+<th class="text-left p-3">Nombre</th>
+<th class="text-left p-3">Rol</th>
+<th class="text-left p-3">Puntos acumulados</th>
+<th class="text-right p-3">Acciones</th>
+</tr>
+</thead>
+<tbody id="playersTable"></tbody>
+</table>
+</div>
+<div class="mt-4 rounded-xl border bg-slate-50 p-3 text-sm text-slate-700">
+<div class="font-semibold">Reglas de emparejamiento</div>
+<ul class="list-disc pl-5 mt-1 space-y-1">
+<li>Las parejas se forman siempre <b>IZQUIERDA - DERECHA</b>.</li>
+<li>Una jugadora <b>COMODÍN</b> puede ocupar izquierda o derecha.</li>
+<li>Una jugadora solo puede aparecer <b>una vez</b> por ronda (no puede jugar en dos pistas a la vez).</li>
+<li>En la jornada, el sistema intenta que <b>no se repitan parejas</b> (histórico global).</li>
+</ul>
+</div>
+</div>
+</div>
+</section>
+<!-- TAB 2: Jornada -->
+<section class="tab-panel mt-6 hidden" id="tab-plan">
+<div class="bg-white border rounded-2xl shadow-sm p-4">
+<h2 class="text-lg font-semibold">Planificar jornada (90 minutos)</h2>
+<p class="text-sm text-slate-600 mt-1">
+          Indica <b>pistas disponibles</b>. En cada pista juegan 2 parejas (4 jugadoras).
+          Si hay 1 pista → 1 partido por ronda; 2 pistas → 2 partidos por ronda; etc.
+        </p>
+<div class="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+<div>
+<label class="block text-sm font-medium">Pistas disponibles</label>
+<input class="w-full rounded-xl border px-3 py-2" id="courtCount" min="1" placeholder="Ej: 2" step="1" type="number"/>
+<p class="text-xs text-slate-500 mt-1">Cada pista usa 4 jugadoras por ronda.</p>
+</div>
+<div>
+<label class="block text-sm font-medium">Jugadoras a incluir</label>
+<input class="w-full rounded-xl border px-3 py-2" id="includeCount" min="4" placeholder="Ej: 8" step="1" type="number"/>
+<p class="text-xs text-slate-500 mt-1" id="needPlayersHint">Mínimo: --</p>
+</div>
+<div>
+<label class="block text-sm font-medium">Rondas (nº de turnos)</label>
+<input class="w-full rounded-xl border px-3 py-2" id="matchCount" min="1" placeholder="Ej: 6" step="1" type="number"/>
+<p class="text-xs text-slate-500 mt-1">Cada ronda genera <b>pistas</b> partidos simultáneos.</p>
+</div>
+<div class="rounded-2xl border bg-slate-50 p-3">
+<div class="text-sm text-slate-600">Duración por ronda</div>
+<div class="text-2xl font-bold mono" id="matchDurationLabel">--:--</div>
+<div class="text-xs text-slate-500">90 min / nº de rondas</div>
+</div>
+<div class="md:col-span-4">
+<label class="block text-sm font-medium">Selecciona jugadoras para esta jornada</label>
+<div class="mt-2 flex flex-wrap gap-2">
+<button class="px-3 py-2 rounded-xl bg-white border shadow-sm hover:bg-slate-50 text-sm" id="btnSelectAllPlayers" type="button">
+                Seleccionar todas
+              </button>
+<button class="px-3 py-2 rounded-xl bg-white border shadow-sm hover:bg-slate-50 text-sm" id="btnClearSelectedPlayers" type="button">
+                Quitar selección
+              </button>
+</div>
+<div class="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2" id="includePlayersGrid"></div>
+<p class="text-xs text-slate-500 mt-2">Si marcas menos de las necesarias, se completa aleatoriamente.</p>
+</div>
+</div>
+<div class="mt-4 hidden rounded-xl border p-3 text-sm" id="planMsg"></div>
+<div class="mt-4 flex flex-col sm:flex-row gap-2">
+<button class="px-4 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm" id="btnBuildSchedule">
+            Generar jornada (sin repetir parejas)
+          </button>
+<button class="px-4 py-2 rounded-xl bg-white border hover:bg-slate-50 shadow-sm" id="btnClearSchedule">
+            Limpiar jornada
+          </button>
+</div>
+<div class="mt-5">
+<h3 class="font-semibold">Rondas planificadas</h3>
+<div class="mt-2 space-y-3" id="scheduleList"></div>
+</div>
+</div>
+</section>
+<!-- TAB 3: Partido -->
+<section class="tab-panel mt-6 hidden" id="tab-match">
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+<div class="bg-white border rounded-2xl shadow-sm p-4 lg:col-span-2">
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+<div>
+<h2 class="text-lg font-semibold">Ronda en curso</h2>
+<p class="text-sm text-slate-600 mt-1">Esta ronda puede tener varias pistas (partidos simultáneos).</p>
+</div>
+<div class="rounded-2xl border bg-slate-50 p-3">
+<div class="text-xs text-slate-600">Temporizador</div>
+<div class="text-3xl font-bold mono" id="timerLabel">00:00</div>
+<div class="flex gap-2 mt-2">
+<button class="px-3 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 text-sm" id="btnStart">Iniciar</button>
+<button class="px-3 py-2 rounded-xl bg-white border hover:bg-slate-50 text-sm" id="btnPause">Pausar</button>
+<button class="px-3 py-2 rounded-xl bg-white border hover:bg-slate-50 text-sm" id="btnResetTimer">Reiniciar</button>
+</div>
+</div>
+</div>
+<div class="mt-4 hidden rounded-xl border p-3 text-sm" id="matchMsg"></div>
+<div class="mt-4 rounded-2xl border bg-white p-4">
+<div class="flex items-center justify-between">
+<h3 class="font-semibold">Pistas y parejas</h3>
+<div class="text-sm text-slate-600" id="currentMatchIndexLabel">Ronda -/-</div>
+</div>
+<div class="mt-3 grid grid-cols-1 gap-3" id="currentMatchPairs"></div>
+</div>
+<div class="mt-4 rounded-2xl border bg-white p-4">
+<h3 class="font-semibold">Resultados (al finalizar el tiempo)</h3>
+<div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+<div>
+<label class="block text-sm font-medium">Fecha</label>
+<input class="w-full rounded-xl border px-3 py-2" id="resultDate" type="date"/>
+</div>
+<div>
+<label class="block text-sm font-medium">Comentario (opcional)</label>
+<input class="w-full rounded-xl border px-3 py-2" id="resultComment"/>
+</div>
+</div>
+<div class="mt-4" id="resultsGrid"></div>
+<div class="mt-4 flex flex-col sm:flex-row gap-2">
+<button class="px-4 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm disabled:opacity-50" disabled="" id="btnSaveResult">
+                Guardar resultado de la ronda
+              </button>
+<button class="px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800 shadow-sm disabled:opacity-50" disabled="" id="btnNextMatch">
+                Siguiente ronda (mostrar + iniciar)
+              </button>
+</div>
+</div>
+</div>
+<div class="bg-white border rounded-2xl shadow-sm p-4">
+<h2 class="text-lg font-semibold">Control rápido</h2>
+<div class="mt-4 space-y-3 text-sm">
+<div class="rounded-2xl border bg-slate-50 p-3">
+<div class="text-slate-600">Rondas planificadas</div>
+<div class="text-xl font-bold" id="statPlanned">0</div>
+</div>
+<div class="rounded-2xl border bg-slate-50 p-3">
+<div class="text-slate-600">Rondas completadas</div>
+<div class="text-xl font-bold" id="statDone">0</div>
+</div>
+<div class="rounded-2xl border bg-slate-50 p-3">
+<div class="text-slate-600">Duración por ronda</div>
+<div class="text-xl font-bold mono" id="statDuration">--:--</div>
+</div>
+<button class="w-full px-4 py-2 rounded-xl bg-white border hover:bg-slate-50 shadow-sm" id="btnGoRanking">Ver ranking</button>
+</div>
+</div>
+</div>
+</section>
+<!-- TAB 4: Ranking -->
+<section class="tab-panel mt-6 hidden" id="tab-ranking">
+<div class="bg-white border rounded-2xl shadow-sm p-4">
+<div class="flex items-center justify-between gap-2">
+<div>
+<h2 class="text-lg font-semibold">Ranking</h2>
+<p class="text-sm text-slate-600 mt-1">Ordenado por puntos acumulados.</p>
+</div>
+<button class="px-4 py-2 rounded-xl bg-white border hover:bg-slate-50 shadow-sm" id="btnRecalcRanking">Refrescar</button>
+</div>
+<div class="mt-4 overflow-auto border rounded-2xl">
+<table class="min-w-full text-sm">
+<thead class="bg-slate-100 text-slate-700">
+<tr>
+<th class="text-left p-3">#</th>
+<th class="text-left p-3">Jugadora</th>
+<th class="text-left p-3">Rol</th>
+<th class="text-left p-3">Puntos</th>
+<th class="text-left p-3">Partidos jugados</th>
+</tr>
+</thead>
+<tbody id="rankingTable"></tbody>
+</table>
+</div>
+</div>
+</section>
+<!-- TAB 5: Historial -->
+<section class="tab-panel mt-6 hidden" id="tab-history">
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+<div class="bg-white border rounded-2xl shadow-sm p-4">
+<h2 class="text-lg font-semibold">Jornadas guardadas</h2>
+<div class="mt-4 space-y-3" id="journalsList"></div>
+</div>
+<div class="bg-white border rounded-2xl shadow-sm p-4">
+<h2 class="text-lg font-semibold">Resumen</h2>
+<div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+<div class="rounded-2xl border bg-slate-50 p-3">
+<div class="text-slate-600">Jugadoras</div>
+<div class="text-xl font-bold" id="sumPlayers">0</div>
+</div>
+<div class="rounded-2xl border bg-slate-50 p-3">
+<div class="text-slate-600">Parejas históricas</div>
+<div class="text-xl font-bold" id="sumPairsHistory">0</div>
+</div>
+<div class="rounded-2xl border bg-slate-50 p-3">
+<div class="text-slate-600">Jornadas</div>
+<div class="text-xl font-bold" id="sumJournals">0</div>
+</div>
+<div class="rounded-2xl border bg-slate-50 p-3">
+<div class="text-slate-600">Rondas registradas</div>
+<div class="text-xl font-bold" id="sumMatches">0</div>
+</div>
+</div>
+<div class="mt-4 rounded-2xl border bg-white p-3 text-sm text-slate-700">
+<div class="font-semibold">Evitar repetir parejas</div>
+<div class="mt-4 rounded-2xl border bg-white p-4">
+<div class="flex items-center justify-between gap-2">
+<h3 class="font-semibold">Detalle de jornada</h3>
+<button class="px-3 py-2 rounded-xl bg-white border hover:bg-slate-50 shadow-sm text-sm" id="btnClearJournalDetail">
+                Cerrar
+              </button>
+</div>
+<p class="text-sm text-slate-600 mt-1">
+              Haz clic en una jornada de la izquierda para ver quién jugó cada partido y los resultados.
+            </p>
+<div class="mt-3" id="journalDetail"></div>
+</div>
+<p class="mt-2">Cada pareja se guarda como clave <span class="mono">A|B</span> (ordenada). Si existe, no se reutiliza.</p>
+</div>
+</div>
+</div>
+</section>
+<footer class="mt-10 text-xs text-slate-500">
+      Funciona con doble clic en el HTML · Todo se guarda en LocalStorage.
+    </footer>
+</div>
+<script>
+    /***********************************************************************
+     * PASO A PASO (muy comentado):
+     *
+     * 1) Guardamos todo en "db" y lo persistimos en LocalStorage.
+     * 2) Planificamos una jornada de 90 min dividida en "rondas".
+     * 3) En cada ronda hay N pistas (partidos simultáneos).
+     * 4) Cada pista necesita 2 parejas → 4 jugadoras.
+     * 5) Por ronda usamos 4*N jugadoras, sin repetir dentro de la ronda.
+     * 6) Evitamos repetir parejas (histórico global).
+     * 7) Temporizador por ronda y resultados por jugadora.
+     ***********************************************************************/
+
+    const STORAGE_KEY = "padel_jornada_manager_v2_courts";
+    let db = { players: [], pairHistory: [], journals: [], currentJournalId: null };
+
+    // ✅ Estado de UI: qué jornada estamos viendo en detalle (no hace falta guardarlo en LocalStorage)
+    let selectedJournalId = null;
+
+    const $ = (sel) => document.querySelector(sel);
+    const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+
+    function uid(prefix="id") { return prefix + "_" + Math.random().toString(16).slice(2) + "_" + Date.now().toString(16); }
+
+    function roleLabel(r) { return r === "L" ? "IZQUIERDA" : r === "R" ? "DERECHA" : "COMODÍN"; }
+
+    function escapeHtml(str) {
+      return String(str).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");
+    }
+
+    function fmtMMSS(sec) {
+      sec = Math.max(0, Math.floor(sec));
+      const m = String(Math.floor(sec / 60)).padStart(2,"0");
+      const s = String(sec % 60).padStart(2,"0");
+      return `${m}:${s}`;
+    }
+
+    function pairKey(aId, bId) { return [aId, bId].sort().join("|"); }
+
+    function shuffleInPlace(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+    }
+
+    function getPlayer(id) { return db.players.find(p => p.id === id) || null; }
+
+    /***********************************************************************
+     * 🔔 SONIDO (timbre) al finalizar el tiempo
+     *
+     * Importante: en navegadores modernos el audio suele requerir interacción
+     * del usuario antes (por ejemplo, haber pulsado "Iniciar"). Como aquí
+     * siempre se inicia el timer con un click, normalmente sonará sin problema.
+     ***********************************************************************/
+    let audioCtx = null;
+
+    function playBeep() {
+      try {
+        // Creamos el contexto de audio solo la primera vez (mejor rendimiento).
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        // Si el contexto está "suspendido" (a veces pasa), lo reanudamos.
+        if (audioCtx.state === "suspended") audioCtx.resume();
+
+        // Un oscilador genera una onda (un tono). Lo conectamos al altavoz.
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        // Frecuencia del tono (Hz). 880 = agudo, fácil de oír.
+        osc.frequency.value = 880;
+        osc.type = "sine";
+
+        // Volumen: bajito para no molestar.
+        gain.gain.value = 0.15;
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        // Arrancamos y paramos muy rápido para hacer "beep".
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.25);
+      } catch (e) {
+        // Si el navegador no permite audio, simplemente no hacemos nada.
+        console.warn("No se pudo reproducir el timbre:", e);
+      }
+    }
+
+
+    function load() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      try { db = { ...db, ...JSON.parse(raw) }; } catch (e) { console.warn("LocalStorage inválido:", e); }
+    }
+
+    function save() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+      renderAll();
+    }
+
+    function setTab(name) {
+      $$(".tab-panel").forEach(p => p.classList.add("hidden"));
+      $("#tab-" + name).classList.remove("hidden");
+      $$(".tab").forEach(b => b.classList.remove("tab-active"));
+      const btn = document.querySelector(`.tab[data-tab="${name}"]`);
+      if (btn) btn.classList.add("tab-active");
+    }
+
+    function renderAll() {
+      renderPlayers();
+      renderIncludeGrid();
+      renderPlanDerived();
+      renderSchedule();
+      renderCurrentRound();
+      renderRanking();
+      renderHistory();
+      renderSummary();
+      renderJournalDetail();
+    }
+
+    function renderPlayers() {
+      $("#playersCount").textContent = `${db.players.length} jugadoras`;
+      const rows = db.players.slice().sort((a,b)=>a.name.localeCompare(b.name,"es")).map(p => `
+        <tr class="border-t">
+          <td class="p-3 font-medium">${escapeHtml(p.name)}</td>
+          <td class="p-3">${roleLabel(p.role)}</td>
+          <td class="p-3">${p.pointsTotal || 0}</td>
+          <td class="p-3 text-right">
+            <button class="btnEditPlayer px-3 py-1 rounded-lg bg-white border hover:bg-slate-50" data-id="${p.id}">Editar</button>
+            <button class="btnDelPlayer px-3 py-1 rounded-lg bg-rose-600 text-white hover:bg-rose-700 ml-2" data-id="${p.id}">Borrar</button>
+          </td>
+        </tr>
+      `).join("");
+      $("#playersTable").innerHTML = rows || `<tr><td class="p-3 text-slate-500" colspan="4">Aún no hay jugadoras.</td></tr>`;
+      $$(".btnDelPlayer").forEach(b => b.addEventListener("click", () => delPlayer(b.dataset.id)));
+      $$(".btnEditPlayer").forEach(b => b.addEventListener("click", () => editPlayerPrompt(b.dataset.id)));
+    }
+
+    function renderIncludeGrid() {
+      const wrap = $("#includePlayersGrid");
+      if (!db.players.length) { wrap.innerHTML = `<div class="text-sm text-slate-500">Añade jugadoras en "Jugadoras".</div>`; return; }
+      const current = getCurrentJournal();
+      const selected = new Set(current?.includeIds || []);
+      wrap.innerHTML = db.players.slice().sort((a,b)=>a.name.localeCompare(b.name,"es")).map(p => {
+        const checked = selected.has(p.id) ? "checked" : "";
+        return `
+          <label class="flex items-center gap-2 rounded-xl border bg-white p-2 cursor-pointer hover:bg-slate-50">
+            <input type="checkbox" class="includeChk" data-id="${p.id}" ${checked} />
+            <div class="flex-1">
+              <div class="text-sm font-medium">${escapeHtml(p.name)}</div>
+              <div class="text-xs text-slate-500">${roleLabel(p.role)}</div>
+            </div>
+          </label>
+        `;
+      }).join("");
+      $$(".includeChk").forEach(chk => chk.addEventListener("change", () => {
+        let j = getCurrentJournal();
+      // Si la jornada actual ya tiene rondas (por ejemplo, ya se jugó), creamos una NUEVA jornada.
+      if (j && (j.schedule?.length || 0) > 0) {
+        j = createNewJournalDraft();
+      } else {
+        j = ensureCurrentJournalDraft();
+      }
+        const id = chk.dataset.id;
+        const set = new Set(j.includeIds);
+        chk.checked ? set.add(id) : set.delete(id);
+        j.includeIds = Array.from(set);
+        save();
+      }));
+    }
+
+    function renderPlanDerived() {
+      const rounds = Number($("#matchCount").value || 0);
+      const courts = Number($("#courtCount").value || 0);
+      $("#matchDurationLabel").textContent = rounds > 0 ? fmtMMSS(Math.floor((90*60)/rounds)) : "--:--";
+      const needed = courts > 0 ? 4 * courts : 0;
+      $("#needPlayersHint").textContent = needed ? `Mínimo: ${needed} (4 × ${courts} pistas)` : "Mínimo: --";
+    }
+
+    function renderSchedule() {
+      const j = getCurrentJournal();
+      const wrap = $("#scheduleList");
+      if (!j || !j.schedule?.length) {
+        wrap.innerHTML = `<div class="text-sm text-slate-500">Aún no has generado una jornada.</div>`;
+        $("#statPlanned").textContent = "0";
+        $("#statDone").textContent = "0";
+        $("#statDuration").textContent = "--:--";
+        return;
+      }
+
+      wrap.innerHTML = j.schedule.map((round, idx) => {
+        const done = round.resultSaved ? "✅" : "⏳";
+        const courtsHtml = round.courts.map(c => {
+          const aL = getPlayer(c.pairA.leftId), aR = getPlayer(c.pairA.rightId);
+          const bL = getPlayer(c.pairB.leftId), bR = getPlayer(c.pairB.rightId);
+          return `
+            <div class="rounded-xl border p-2 mt-2">
+              <div class="font-semibold">Pista ${c.courtNo}</div>
+              <div class="text-sm mt-1">
+                <div><span class="font-medium">Pareja A:</span> ${escapeHtml(aL?.name||"¿?")} (I) - ${escapeHtml(aR?.name||"¿?")} (D)</div>
+                <div><span class="font-medium">Pareja B:</span> ${escapeHtml(bL?.name||"¿?")} (I) - ${escapeHtml(bR?.name||"¿?")} (D)</div>
+              </div>
+            </div>
+          `;
+        }).join("");
+
+        return `
+          <div class="journalCard rounded-2xl border bg-white p-3 cursor-pointer hover:bg-slate-50" data-id="${j.id}">
+            <div class="flex items-center justify-between">
+              <div class="font-semibold">Ronda ${idx+1} ${done}</div>
+              <div class="text-xs text-slate-500">duración: ${fmtMMSS(j.durationSec)} · pistas: ${round.courts.length}</div>
+            </div>
+            ${courtsHtml}
+          </div>
+        `;
+      }).join("");
+
+      $("#statPlanned").textContent = j.schedule.length;
+      $("#statDone").textContent = j.schedule.filter(x => x.resultSaved).length;
+      $("#statDuration").textContent = fmtMMSS(j.durationSec);
+    }
+
+    function renderCurrentRound() {
+      const j = getCurrentJournal();
+      if (!j || !j.schedule?.length) {
+        $("#currentMatchIndexLabel").textContent = "Ronda -/-";
+        $("#currentMatchPairs").innerHTML = `<div class="text-sm text-slate-500">Genera la jornada en "Jornada".</div>`;
+        $("#resultsGrid").innerHTML = "";
+        disableResultsUI(true);
+        return;
+      }
+
+      const idx = j.currentRoundIndex || 0;
+      const round = j.schedule[idx];
+      $("#currentMatchIndexLabel").textContent = `Ronda ${idx+1}/${j.schedule.length}`;
+
+      $("#currentMatchPairs").innerHTML = round.courts.map(c => {
+        const aL = getPlayer(c.pairA.leftId), aR = getPlayer(c.pairA.rightId);
+        const bL = getPlayer(c.pairB.leftId), bR = getPlayer(c.pairB.rightId);
+        return `
+          <div class="rounded-xl border p-3">
+            <div class="font-semibold">Pista ${c.courtNo}</div>
+            <div class="mt-2">
+              <div class="rounded-lg border p-2">
+                <div class="font-medium">Pareja A</div>
+                <div>${escapeHtml(aL?.name||"¿?")} (I) - ${escapeHtml(aR?.name||"¿?")} (D)</div>
+              </div>
+              <div class="rounded-lg border p-2 mt-2">
+                <div class="font-medium">Pareja B</div>
+                <div>${escapeHtml(bL?.name||"¿?")} (I) - ${escapeHtml(bR?.name||"¿?")} (D)</div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      // ✅ MEJORA: ahora pedimos puntos UNA sola vez por pareja (no por jugadora).
+      // Luego, al guardar, esos puntos se suman a las dos jugadoras de la pareja.
+      const pairInputs = [];
+      for (const c of round.courts) {
+        const aL = getPlayer(c.pairA.leftId), aR = getPlayer(c.pairA.rightId);
+        const bL = getPlayer(c.pairB.leftId), bR = getPlayer(c.pairB.rightId);
+
+        pairInputs.push({
+          courtNo: c.courtNo,
+          team: "A",
+          label: `Pista ${c.courtNo} · Pareja A`,
+          names: `${aL?.name||"¿?"} (I) - ${aR?.name||"¿?"} (D)`,
+          playerIds: [c.pairA.leftId, c.pairA.rightId]
+        });
+
+        pairInputs.push({
+          courtNo: c.courtNo,
+          team: "B",
+          label: `Pista ${c.courtNo} · Pareja B`,
+          names: `${bL?.name||"¿?"} (I) - ${bR?.name||"¿?"} (D)`,
+          playerIds: [c.pairB.leftId, c.pairB.rightId]
+        });
+      }
+
+      $("#resultsGrid").innerHTML = `
+        <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+          ${pairInputs.map((pi, idx) => `
+            <div class="rounded-2xl border bg-slate-50 p-3">
+              <div class="text-sm font-semibold">${escapeHtml(pi.label)}</div>
+              <div class="text-xs text-slate-600 mt-1">${escapeHtml(pi.names)}</div>
+
+              <label class="block text-xs text-slate-600 mt-3">Puntos ganados por la pareja</label>
+              <input type="number" min="0" step="1"
+                     class="pairPointsInput w-full rounded-xl border px-3 py-2 mt-1"
+                     data-players="${pi.playerIds.join(",")}"
+                     placeholder="0" disabled />
+            </div>
+          `).join("")}
+        </div>
+        <p class="text-xs text-slate-500 mt-3">
+          Nota: los puntos introducidos se suman a <b>las dos jugadoras</b> de la pareja.
+        </p>
+      `;
+
+      if (!$("#resultDate").value) $("#resultDate").value = new Date().toISOString().slice(0,10);
+
+      if (round.resultSaved) {
+        showMatchMessage("info", "Esta ronda ya tiene resultado guardado. Puedes pasar a la siguiente.");
+        disableResultsUI(true);
+        $("#btnNextMatch").disabled = false;
+      } else {
+        clearMatchMessage();
+        disableResultsUI(true);
+      }
+
+      $("#statPlanned").textContent = j.schedule.length;
+      $("#statDone").textContent = j.schedule.filter(x => x.resultSaved).length;
+      $("#statDuration").textContent = fmtMMSS(j.durationSec);
+    }
+
+    function renderRanking() {
+      const rows = db.players.slice().sort((a,b)=>(b.pointsTotal||0)-(a.pointsTotal||0)).map((p,i)=>`
+        <tr class="border-t">
+          <td class="p-3">${i+1}</td>
+          <td class="p-3 font-medium">${escapeHtml(p.name)}</td>
+          <td class="p-3">${roleLabel(p.role)}</td>
+          <td class="p-3">${p.pointsTotal || 0}</td>
+          <td class="p-3">${countMatchesForPlayer(p.id)}</td>
+        </tr>
+      `).join("");
+      $("#rankingTable").innerHTML = rows || `<tr><td class="p-3 text-slate-500" colspan="5">No hay jugadoras.</td></tr>`;
+    }
+
+    function renderHistory() {
+      const wrap = $("#journalsList");
+      if (!db.journals.length) { wrap.innerHTML = `<div class="text-sm text-slate-500">Aún no hay jornadas guardadas.</div>`; return; }
+      wrap.innerHTML = db.journals.slice().sort((a,b)=>b.createdAt-a.createdAt).map(j => {
+        const done = j.schedule?.filter(x => x.resultSaved).length || 0;
+        const total = j.schedule?.length || 0;
+        const active = (db.currentJournalId === j.id) ? " (ACTIVA)" : "";
+        return `
+            <div class="journalCard rounded-2xl border bg-white p-3 cursor-pointer hover:bg-slate-50" data-id="${j.id}">
+            <div class="flex items-center justify-between gap-2">
+              <div>
+                <div class="font-semibold">Jornada ${new Date(j.createdAt).toLocaleString("es-ES")} ${active}</div>
+                <div class="text-xs text-slate-500">jugadoras: ${j.includeIds?.length||0} · rondas: ${total} · completadas: ${done} · pistas: ${j.courtCount||1} · duración: ${fmtMMSS(j.durationSec||0)}</div>
+              </div>
+              <div class="flex gap-2">
+                <button class="btnActivateJournal px-3 py-1 rounded-lg bg-slate-900 text-white hover:bg-slate-800 text-sm" data-id="${j.id}">Activar</button>
+                  <button class="btnConsultJournal px-3 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm" data-id="${j.id}">Consultar</button>
+                <button class="btnDeleteJournal px-3 py-1 rounded-lg bg-rose-600 text-white hover:bg-rose-700 text-sm" data-id="${j.id}">Borrar</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join("");
+      $$(".btnActivateJournal").forEach(b => b.addEventListener("click", (ev) => {
+        ev.stopPropagation(); // ✅ para que NO abra el detalle al pulsar "Activar"
+        activateJournal(b.dataset.id);
+      }));
+      $$(".btnDeleteJournal").forEach(b => b.addEventListener("click", (ev) => {
+        ev.stopPropagation(); // ✅ para que NO abra el detalle al pulsar "Borrar"
+        deleteJournal(b.dataset.id);
+
+      $$(".btnConsultJournal").forEach(b => b.addEventListener("click", (ev) => {
+        ev.stopPropagation(); // ✅ no queremos activar el click de la tarjeta
+        selectedJournalId = b.dataset.id;
+        renderJournalDetail();
+
+        // Opcional: bajamos el scroll para que se vea el detalle en pantallas largas
+        const detail = $("#journalDetail");
+        if (detail) detail.scrollIntoView({ behavior: "smooth", block: "start" });
+      }));
+      }));
+
+      // ✅ Click en la tarjeta de jornada: muestra el detalle
+      $$(".journalCard").forEach(card => card.addEventListener("click", () => {
+        selectedJournalId = card.dataset.id;
+        renderJournalDetail();
+      }));
+    }
+
+    /***********************************************************************
+     * 📌 DETALLE DE JORNADA (Historial)
+     *
+     * - Al hacer clic en una jornada, mostramos cada ronda.
+     * - Para cada pista, enseñamos Pareja A y Pareja B, quién jugó y los puntos.
+     ***********************************************************************/
+    function renderJournalDetail() {
+      const box = $("#journalDetail");
+      if (!box) return;
+
+      if (!selectedJournalId) {
+        box.innerHTML = `<div class="text-sm text-slate-500">No hay ninguna jornada seleccionada.</div>`;
+        return;
+      }
+
+      const j = db.journals.find(x => x.id === selectedJournalId);
+      if (!j) {
+        box.innerHTML = `<div class="text-sm text-slate-500">La jornada seleccionada ya no existe.</div>`;
+        return;
+      }
+
+      const totalRounds = j.schedule?.length || 0;
+      const doneRounds = j.schedule?.filter(r => r.resultSaved).length || 0;
+
+      const header = `
+        <div class="rounded-xl border bg-slate-50 p-3">
+          <div class="font-semibold">Jornada ${new Date(j.createdAt).toLocaleString("es-ES")}${db.currentJournalId===j.id ? " (ACTIVA)" : ""}</div>
+          <div class="text-xs text-slate-600 mt-1">
+            pistas: ${j.courtCount || 1} · jugadoras incluidas: ${j.includeIds?.length || 0} · rondas: ${totalRounds} · completadas: ${doneRounds} · duración/ronda: ${fmtMMSS(j.durationSec || 0)}
+          </div>
+        </div>
+      `;
+
+      if (!totalRounds) {
+        box.innerHTML = header + `<div class="text-sm text-slate-500 mt-3">Esta jornada no tiene rondas planificadas.</div>`;
+        return;
+      }
+
+      const roundsHtml = (j.schedule || []).map((round, idx) => {
+        const hasResult = !!round.resultSaved && !!round.result;
+        const date = hasResult ? (round.result.date || "") : "";
+        const comment = hasResult ? (round.result.comment || "") : "";
+        const pointsMap = hasResult ? (round.result.points || {}) : {};
+
+        const courtsHtml = (round.courts || []).map(c => {
+          const aL = getPlayer(c.pairA.leftId), aR = getPlayer(c.pairA.rightId);
+          const bL = getPlayer(c.pairB.leftId), bR = getPlayer(c.pairB.rightId);
+
+          // Puntos por pareja: como se introducen por pareja, podemos leer el valor de cualquiera de las dos jugadoras.
+          const ptsA = hasResult ? Number(pointsMap[c.pairA.leftId] || 0) : "";
+          const ptsB = hasResult ? Number(pointsMap[c.pairB.leftId] || 0) : "";
+
+          return `
+            <div class="rounded-xl border p-3 mt-2">
+              <div class="font-semibold">Pista ${c.courtNo}</div>
+
+              <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div class="rounded-lg border bg-white p-2">
+                  <div class="text-sm font-medium">Pareja A</div>
+                  <div class="text-sm">${escapeHtml(aL?.name||"¿?" )} (I) - ${escapeHtml(aR?.name||"¿?" )} (D)</div>
+                  <div class="text-xs text-slate-600 mt-1">Puntos pareja: <b>${hasResult ? ptsA : "-"}</b></div>
+                </div>
+
+                <div class="rounded-lg border bg-white p-2">
+                  <div class="text-sm font-medium">Pareja B</div>
+                  <div class="text-sm">${escapeHtml(bL?.name||"¿?" )} (I) - ${escapeHtml(bR?.name||"¿?" )} (D)</div>
+                  <div class="text-xs text-slate-600 mt-1">Puntos pareja: <b>${hasResult ? ptsB : "-"}</b></div>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join("");
+
+        return `
+          <div class="rounded-2xl border bg-white p-3 mt-3">
+            <div class="flex items-center justify-between gap-2">
+              <div class="font-semibold">Ronda ${idx+1} ${hasResult ? "✅" : "⏳"}</div>
+              <div class="text-xs text-slate-600">${hasResult ? `fecha: ${escapeHtml(date)}` : "sin resultado"}</div>
+            </div>
+            ${hasResult && comment ? `<div class="text-xs text-slate-600 mt-2">Comentario: ${escapeHtml(comment)}</div>` : ""}
+            ${courtsHtml}
+          </div>
+        `;
+      }).join("");
+
+      box.innerHTML = header + roundsHtml;
+    }
+
+    function renderSummary() {
+      $("#sumPlayers").textContent = db.players.length;
+      $("#sumPairsHistory").textContent = db.pairHistory.length;
+      $("#sumJournals").textContent = db.journals.length;
+      const rounds = db.journals.reduce((acc, j) => acc + (j.schedule?.length || 0), 0);
+      $("#sumMatches").textContent = rounds;
+    }
+
+    function addPlayer() {
+      const name = ($("#playerName").value || "").trim();
+      const role = $("#playerRole").value;
+      if (!name) return alert("Introduce un nombre.");
+      db.players.push({ id: uid("p"), name, role, pointsTotal: 0 });
+      $("#playerName").value = "";
+      $("#playerRole").value = "L";
+      save();
+    }
+
+    function delPlayer(id) {
+      const p = getPlayer(id);
+      if (!p) return;
+      if (!confirm(`¿Borrar jugadora "${p.name}"?`)) return;
+      db.players = db.players.filter(x => x.id !== id);
+
+      db.journals = db.journals.map(j => {
+        const includeIds = (j.includeIds || []).filter(pid => pid !== id);
+        const schedule = (j.schedule || []).filter(r => {
+          const ids = [];
+          for (const c of (r.courts || [])) ids.push(c.pairA.leftId, c.pairA.rightId, c.pairB.leftId, c.pairB.rightId);
+          return !ids.includes(id);
+        });
+        return { ...j, includeIds, schedule };
+      });
+
+      save();
+    }
+
+    function editPlayerPrompt(id) {
+      const p = getPlayer(id);
+      if (!p) return;
+      const name = prompt("Nombre:", p.name);
+      if (name === null) return;
+      const role = prompt("Rol (L=Izquierda, R=Derecha, C=Comodín):", p.role);
+      if (role === null) return;
+      const r = role.trim().toUpperCase();
+      if (!["L","R","C"].includes(r)) return alert("Rol inválido. Usa L, R o C.");
+      p.name = name.trim() || p.name;
+      p.role = r;
+      save();
+    }
+
+    function ensureCurrentJournalDraft() {
+      const j = getCurrentJournal();
+      if (j) return j;
+      const newJ = { id: uid("j"), createdAt: Date.now(), includeIds: [], roundCount: 0, courtCount: 1, durationSec: 0, schedule: [], currentRoundIndex: 0 };
+      db.journals.push(newJ);
+      db.currentJournalId = newJ.id;
+      return newJ;
+    }
+
+    /***********************************************************************
+     * ✅ NUEVA JORNADA
+     *
+     * Antes reutilizábamos siempre la jornada "activa". Ahora:
+     * - Si ya hay una jornada con rondas planificadas (o finalizada),
+     *   al pulsar "Generar jornada" creamos una NUEVA jornada.
+     * - Así, las parejas pueden repetirse entre jornadas diferentes.
+     ***********************************************************************/
+    function createNewJournalDraft() {
+      const newJ = {
+        id: uid("j"),
+        createdAt: Date.now(),
+        includeIds: [],
+        roundCount: 0,
+        courtCount: 1,
+        durationSec: 0,
+        schedule: [],
+        currentRoundIndex: 0
+      };
+      db.journals.push(newJ);
+      db.currentJournalId = newJ.id;
+      return newJ;
+    }
+
+
+    function getCurrentJournal() {
+      if (!db.currentJournalId) return null;
+      return db.journals.find(j => j.id === db.currentJournalId) || null;
+    }
+
+    function activateJournal(id) { db.currentJournalId = id; save(); setTab("match"); }
+
+    function deleteJournal(id) {
+      if (!confirm("¿Borrar esta jornada?")) return;
+      db.journals = db.journals.filter(j => j.id !== id);
+      if (db.currentJournalId === id) db.currentJournalId = db.journals[0]?.id || null;
+      save();
+    }
+
+    function planMessage(kind, text) {
+      const el = $("#planMsg");
+      el.classList.remove("hidden");
+      el.classList.remove("bg-rose-50","border-rose-200","text-rose-800","bg-emerald-50","border-emerald-200","text-emerald-800","bg-slate-50","border-slate-200","text-slate-800");
+      if (kind === "error") el.classList.add("bg-rose-50","border-rose-200","text-rose-800");
+      else if (kind === "ok") el.classList.add("bg-emerald-50","border-emerald-200","text-emerald-800");
+      else el.classList.add("bg-slate-50","border-slate-200","text-slate-800");
+      el.textContent = text;
+    }
+    function clearPlanMessage() { const el = $("#planMsg"); el.classList.add("hidden"); el.textContent = ""; }
+
+    function buildSchedule() {
+      clearPlanMessage();
+      if (db.players.length < 4) return planMessage("error","Necesitas al menos 4 jugadoras.");
+
+      const courtCount = Number($("#courtCount").value || 0);
+      const includeCount = Number($("#includeCount").value || 0);
+      const roundCount = Number($("#matchCount").value || 0);
+
+      if (courtCount < 1) return planMessage("error","Pistas disponibles: mínimo 1.");
+      if (roundCount < 1) return planMessage("error","Rondas: mínimo 1.");
+
+      const neededPerRound = 4 * courtCount;
+      if (includeCount < neededPerRound) return planMessage("error", `Con ${courtCount} pistas necesitas al menos ${neededPerRound} jugadoras (4×pistas).`);
+
+      const durationSec = Math.floor((90 * 60) / roundCount);
+      $("#matchDurationLabel").textContent = fmtMMSS(durationSec);
+
+      let j = getCurrentJournal();
+      // Si la jornada actual ya tiene rondas (por ejemplo, ya se jugó), creamos una NUEVA jornada.
+      if (j && (j.schedule?.length || 0) > 0) {
+        j = createNewJournalDraft();
+      } else {
+        j = ensureCurrentJournalDraft();
+      }
+      j.roundCount = roundCount;
+      j.courtCount = courtCount;
+      j.durationSec = durationSec;
+      j.currentRoundIndex = 0;
+
+      const selectedSet = new Set(j.includeIds || []);
+      const allIds = db.players.map(p => p.id);
+
+      if (selectedSet.size < includeCount) {
+        const remaining = allIds.filter(id => !selectedSet.has(id));
+        shuffleInPlace(remaining);
+        while (selectedSet.size < includeCount && remaining.length) selectedSet.add(remaining.pop());
+      }
+
+      if (selectedSet.size > includeCount) {
+        const arr = Array.from(selectedSet);
+        shuffleInPlace(arr);
+        j.includeIds = arr.slice(0, includeCount);
+      } else {
+        j.includeIds = Array.from(selectedSet);
+      }
+
+      const res = generateRoundsNoRepeat(j.includeIds, roundCount, courtCount);
+      if (!res.ok) {
+        planMessage("error", res.message);
+        j.schedule = [];
+        save();
+        return;
+      }
+
+      j.schedule = res.schedule;
+      planMessage("ok","Jornada generada. Ve a 'Partido' para empezar.");
+      save();
+      setTimerSeconds(durationSec);
+      setTab("match");
+    }
+
+    function clearSchedule() {
+      const j = getCurrentJournal();
+      if (!j) return;
+      j.schedule = [];
+      j.currentRoundIndex = 0;
+      save();
+    }
+
+    function generateRoundsNoRepeat(includeIds, roundCount, courtCount) {
+      // 🔁 REGLA ACTUALIZADA: en jornadas DIFERENTES sí se pueden repetir parejas.
+      // Por eso, aquí NO usamos el histórico global (db.pairHistory) como restricción.
+      // Solo evitamos repetir parejas dentro de ESTA jornada.
+      const usedGlobal = new Set();
+      const usedThisJournal = new Set();
+const includedPlayers = includeIds.map(getPlayer).filter(Boolean);
+
+      if (includedPlayers.length < 4 * courtCount) {
+        return { ok:false, message:"No hay suficientes jugadoras válidas para las pistas indicadas." };
+      }
+
+      const schedule = [];
+      for (let r = 0; r < roundCount; r++) {
+        const round = findOneRound(includedPlayers, courtCount, usedGlobal, usedThisJournal);
+        if (!round) return { ok:false, message:"No se pudo generar sin repetir parejas. Prueba menos rondas, más jugadoras o más comodines." };
+
+        schedule.push(round);
+
+        for (const c of round.courts) {
+          usedThisJournal.add(pairKey(c.pairA.leftId, c.pairA.rightId));
+          usedThisJournal.add(pairKey(c.pairB.leftId, c.pairB.rightId));
+        }
+      }
+      return { ok:true, schedule };
+    }
+
+    function findOneRound(playersPool, courtCount, usedGlobal, usedThisJournal) {
+      const ATTEMPTS = 2500;
+      const pairsNeeded = 2 * courtCount;
+      const playersNeeded = 4 * courtCount;
+
+      for (let t = 0; t < ATTEMPTS; t++) {
+        const ids = playersPool.map(p => p.id);
+        shuffleInPlace(ids);
+        const selected = ids.slice(0, playersNeeded);
+        if (selected.length < playersNeeded) continue;
+
+        const remaining = selected.slice();
+        const pairs = [];
+        const usedRoundPairs = new Set();
+
+        let ok = true;
+        for (let k = 0; k < pairsNeeded; k++) {
+          const pair = pickOnePair(remaining, usedGlobal, usedThisJournal, usedRoundPairs);
+          if (!pair) { ok = false; break; }
+          pairs.push(pair);
+        }
+        if (!ok) continue;
+
+        shuffleInPlace(pairs);
+        const courts = [];
+        for (let c = 0; c < courtCount; c++) {
+          const pA = pairs[2*c], pB = pairs[2*c+1];
+          if (!pA || !pB) { ok = false; break; }
+          courts.push({ courtNo: c+1, pairA: pA, pairB: pB });
+        }
+        if (!ok) continue;
+
+        return { id: uid("round"), courts, resultSaved: false };
+      }
+      return null;
+    }
+
+    function pickOnePair(remainingIds, usedGlobal, usedThisJournal, usedRoundPairs) {
+      const TRY = 200;
+      for (let t = 0; t < TRY; t++) {
+        if (remainingIds.length < 2) return null;
+        const i = Math.floor(Math.random() * remainingIds.length);
+        let j = Math.floor(Math.random() * remainingIds.length);
+        while (j === i && remainingIds.length > 1) j = Math.floor(Math.random() * remainingIds.length);
+
+        const idA = remainingIds[i], idB = remainingIds[j];
+        const oriented = orientAsLeftRight(idA, idB);
+        if (!oriented) continue;
+
+        const k = pairKey(oriented.leftId, oriented.rightId);
+        if (usedGlobal.has(k) || usedThisJournal.has(k) || usedRoundPairs.has(k)) continue;
+
+        const toRemove = new Set([idA, idB]);
+        for (let idx = remainingIds.length - 1; idx >= 0; idx--) if (toRemove.has(remainingIds[idx])) remainingIds.splice(idx, 1);
+
+        usedRoundPairs.add(k);
+        return oriented;
+      }
+      return null;
+    }
+
+    function orientAsLeftRight(idA, idB) {
+      const A = getPlayer(idA), B = getPlayer(idB);
+      if (!A || !B) return null;
+      const A_canL = (A.role === "L" || A.role === "C");
+      const A_canR = (A.role === "R" || A.role === "C");
+      const B_canL = (B.role === "L" || B.role === "C");
+      const B_canR = (B.role === "R" || B.role === "C");
+      if (A_canL && B_canR) return { leftId: idA, rightId: idB };
+      if (B_canL && A_canR) return { leftId: idB, rightId: idA };
+      return null;
+    }
+
+    // ===== Timer =====
+    let timerRemaining = 0;
+    let timerInterval = null;
+
+    function setTimerSeconds(sec) {
+      timerRemaining = Math.max(0, Math.floor(sec));
+      $("#timerLabel").textContent = fmtMMSS(timerRemaining);
+    }
+
+    function startTimer() {
+      const j = getCurrentJournal();
+      if (!j || !j.schedule?.length) return showMatchMessage("error","No hay jornada activa.");
+      if (timerInterval) return;
+      if (timerRemaining <= 0) setTimerSeconds(j.durationSec || 0);
+
+      timerInterval = setInterval(() => {
+        timerRemaining--;
+        $("#timerLabel").textContent = fmtMMSS(timerRemaining);
+        if (timerRemaining <= 0) { stopTimer(); onTimerFinished(); }
+      }, 1000);
+
+      showMatchMessage("ok","Temporizador iniciado.");
+    }
+
+    function stopTimer() { if (timerInterval) { clearInterval(timerInterval); timerInterval = null; } }
+    function pauseTimer() { stopTimer(); showMatchMessage("info","Temporizador pausado."); }
+
+    function resetTimer() {
+      const j = getCurrentJournal();
+      stopTimer();
+      setTimerSeconds(j?.durationSec || 0);
+      showMatchMessage("info","Temporizador reiniciado.");
+    }
+
+    function onTimerFinished() { playBeep(); showMatchMessage("ok","Tiempo finalizado. Ya puedes introducir resultados."); disableResultsUI(false); }
+
+    function disableResultsUI(disabled) {
+      $$(".pairPointsInput").forEach(inp => inp.disabled = disabled);
+      $("#btnSaveResult").disabled = disabled;
+      if (disabled) $("#btnNextMatch").disabled = true;
+    }
+
+    function showMatchMessage(kind, text) {
+      const el = $("#matchMsg");
+      el.classList.remove("hidden");
+      el.classList.remove("bg-rose-50","border-rose-200","text-rose-800","bg-emerald-50","border-emerald-200","text-emerald-800","bg-slate-50","border-slate-200","text-slate-800");
+      if (kind === "error") el.classList.add("bg-rose-50","border-rose-200","text-rose-800");
+      else if (kind === "ok") el.classList.add("bg-emerald-50","border-emerald-200","text-emerald-800");
+      else el.classList.add("bg-slate-50","border-slate-200","text-slate-800");
+      el.textContent = text;
+    }
+    function clearMatchMessage() { const el = $("#matchMsg"); el.classList.add("hidden"); el.textContent = ""; }
+
+    function saveResultForCurrentRound() {
+      const j = getCurrentJournal();
+      if (!j || !j.schedule?.length) return;
+      const idx = j.currentRoundIndex || 0;
+      const round = j.schedule[idx];
+      if (!round) return;
+
+      if (round.resultSaved) {
+        showMatchMessage("info","Esta ronda ya está guardada.");
+        $("#btnNextMatch").disabled = false;
+        return;
+      }
+
+      const date = $("#resultDate").value;
+      if (!date) return showMatchMessage("error","Introduce la fecha.");
+
+      const pointsByPlayer = new Map();
+
+      // ✅ MEJORA: leemos puntos por PAREJA y los aplicamos a las 2 jugadoras de esa pareja.
+      // Cada input lleva data-players="id1,id2" (las dos jugadoras de la pareja).
+      let totalInputs = 0;
+
+      $$(".pairPointsInput").forEach(inp => {
+        const playersCsv = inp.dataset.players || "";
+        const ids = playersCsv.split(",").map(x => x.trim()).filter(Boolean);
+        const val = Number(inp.value || 0);
+
+        if (!Number.isFinite(val) || val < 0) return; // ignoramos valores inválidos
+        if (ids.length !== 2) return;                 // seguridad: una pareja siempre son 2 jugadoras
+
+        // Sumamos estos puntos a cada una de las dos jugadoras de la pareja.
+        for (const pid of ids) {
+          pointsByPlayer.set(pid, (pointsByPlayer.get(pid) || 0) + val);
+        }
+        totalInputs++;
+      });
+
+      // Validación: debe haber 2 inputs por pista (Pareja A y Pareja B).
+      const expected = 2 * (j.courtCount || 1);
+      if (totalInputs < expected) return showMatchMessage("error","Faltan puntos en alguna pareja.");
+for (const [pid, pts] of pointsByPlayer.entries()) {
+        const p = getPlayer(pid);
+        if (p) p.pointsTotal = (p.pointsTotal || 0) + pts;
+      }
+
+      round.resultSaved = true;
+      round.result = { date, comment: ($("#resultComment").value || "").trim(), points: Object.fromEntries(pointsByPlayer.entries()) };
+
+      for (const c of round.courts) {
+        const k1 = pairKey(c.pairA.leftId, c.pairA.rightId);
+        const k2 = pairKey(c.pairB.leftId, c.pairB.rightId);
+        if (!db.pairHistory.includes(k1)) db.pairHistory.push(k1);
+        if (!db.pairHistory.includes(k2)) db.pairHistory.push(k2);
+      }
+
+      showMatchMessage("ok","Resultado guardado. Pasando a la siguiente ronda...");
+      disableResultsUI(true);
+      $("#resultComment").value = "";
+      save();
+
+      // ✅ MEJORA: al guardar el resultado, pasamos automáticamente a la siguiente ronda.
+      // Usamos un pequeño retraso para que el usuario vea el mensaje.
+      setTimeout(() => {
+        goNextRound();
+      }, 400);
+    }
+
+    function goNextRound() {
+      const j = getCurrentJournal();
+      if (!j || !j.schedule?.length) return;
+      stopTimer();
+
+      const idx = j.currentRoundIndex || 0;
+      if (idx + 1 >= j.schedule.length) {
+        showMatchMessage("ok","Jornada finalizada. Mira el ranking.");
+        setTab("ranking");
+        save();
+        return;
+      }
+
+      j.currentRoundIndex = idx + 1;
+      setTimerSeconds(j.durationSec || 0);
+      save();
+      disableResultsUI(true);
+      startTimer();
+    }
+
+    function countMatchesForPlayer(playerId) {
+      let count = 0;
+      for (const j of db.journals) {
+        for (const r of (j.schedule || [])) {
+          if (!r.resultSaved) continue;
+          for (const c of (r.courts || [])) {
+            const ids = [c.pairA.leftId, c.pairA.rightId, c.pairB.leftId, c.pairB.rightId];
+            if (ids.includes(playerId)) count++;
+          }
+        }
+      }
+      return count;
+    }
+
+    function bulkImport() {
+      const raw = $("#bulkImport").value || "";
+      const lines = raw.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+      if (!lines.length) return;
+      let added = 0;
+      for (const line of lines) {
+        const parts = line.split(",").map(x => x.trim());
+        if (parts.length < 2) continue;
+        const [name, roleStr] = parts;
+        const role = (roleStr || "").toUpperCase();
+        if (!["L","R","C"].includes(role)) continue;
+        db.players.push({ id: uid("p"), name: name || "SinNombre", role, pointsTotal: 0 });
+        added++;
+      }
+      alert(`Importadas ${added} jugadoras.`);
+      save();
+    }
+
+    function exportData() {
+      const json = JSON.stringify(db, null, 2);
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "padel-jornada-datos.json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+
+    /***********************************************************************
+     * 📄 EXPORTAR A EXCEL (CSV)
+     *
+     * Excel y Google Sheets abren archivos CSV sin problema.
+     * Creamos 3 "hojas" en un único CSV, separadas por títulos y líneas vacías:
+     *  - Ranking (todas las jugadoras)
+     *  - Jornadas (resumen)
+     *  - Resultados por ronda/pista (detalle)
+     ***********************************************************************/
+    function csvEscape(value) {
+      // Convertimos a texto y escapamos comillas dobles para CSV.
+      const s = String(value ?? "");
+      // Si contiene comas, saltos de línea o comillas, lo envolvemos con comillas.
+      if (/[",\n\r]/.test(s)) return `"${s.replaceAll('"','""')}"`;
+      return s;
+    }
+
+    function downloadTextFile(filename, content, mime="text/plain;charset=utf-8") {
+      const blob = new Blob([content], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function exportCSV() {
+      // Usamos ; como separador (común en Excel en locales ES).
+      const SEP = ";";
+      const lines = [];
+
+      // ---- Hoja 1: Ranking ----
+      lines.push("RANKING");
+      lines.push(["Posición","Jugadora","Rol","Puntos","Partidos jugados"].map(csvEscape).join(SEP));
+
+      const ranked = db.players.slice().sort((a,b)=>(b.pointsTotal||0)-(a.pointsTotal||0));
+      ranked.forEach((p, idx) => {
+        lines.push([
+          idx+1,
+          p.name,
+          roleLabel(p.role),
+          p.pointsTotal || 0,
+          countMatchesForPlayer(p.id)
+        ].map(csvEscape).join(SEP));
+      });
+
+      lines.push(""); // línea vacía
+
+      // ---- Hoja 2: Jornadas (resumen) ----
+      lines.push("JORNADAS (RESUMEN)");
+      lines.push(["JornadaId","Creada","Pistas","JugadorasIncluidas","Rondas","RondasCompletadas","DuraciónPorRonda"].map(csvEscape).join(SEP));
+
+      const journalsSorted = db.journals.slice().sort((a,b)=>a.createdAt-b.createdAt);
+      journalsSorted.forEach(j => {
+        const total = j.schedule?.length || 0;
+        const done = j.schedule?.filter(r => r.resultSaved).length || 0;
+        lines.push([
+          j.id,
+          new Date(j.createdAt).toLocaleString("es-ES"),
+          j.courtCount || 1,
+          (j.includeIds?.length || 0),
+          total,
+          done,
+          fmtMMSS(j.durationSec || 0)
+        ].map(csvEscape).join(SEP));
+      });
+
+      lines.push("");
+
+      // ---- Hoja 3: Detalle de resultados ----
+      lines.push("RESULTADOS (DETALLE)");
+      lines.push([
+        "JornadaId","FechaJornada","RondaN","Pista","Pareja",
+        "JugadoraI","JugadoraD","PuntosPareja",
+        "Comentario"
+      ].map(csvEscape).join(SEP));
+
+      journalsSorted.forEach(j => {
+        const created = new Date(j.createdAt).toLocaleString("es-ES");
+        (j.schedule || []).forEach((round, roundIdx) => {
+          if (!round.resultSaved || !round.result) return;
+
+          // round.result.points es por jugadora (ya distribuido). Para CSV queremos por pareja.
+          // Como ahora pedimos puntos por pareja, reconstruimos los puntos de pareja sumando (idI + idD)/2,
+          // pero ojo: son iguales para ambos. Aquí lo calculamos leyendo el mapa y cogiendo el valor de uno.
+          const pointsMap = round.result.points || {};
+          const comment = round.result.comment || "";
+
+          (round.courts || []).forEach(c => {
+            const aL = getPlayer(c.pairA.leftId), aR = getPlayer(c.pairA.rightId);
+            const bL = getPlayer(c.pairB.leftId), bR = getPlayer(c.pairB.rightId);
+
+            // Pareja A
+            const ptsA = Number(pointsMap[c.pairA.leftId] || 0); // mismo que rightId
+            lines.push([
+              j.id, created, (roundIdx+1), c.courtNo, "A",
+              aL?.name||"", aR?.name||"", ptsA,
+              comment
+            ].map(csvEscape).join(SEP));
+
+            // Pareja B
+            const ptsB = Number(pointsMap[c.pairB.leftId] || 0);
+            lines.push([
+              j.id, created, (roundIdx+1), c.courtNo, "B",
+              bL?.name||"", bR?.name||"", ptsB,
+              comment
+            ].map(csvEscape).join(SEP));
+          });
+        });
+      });
+
+      const stamp = new Date().toISOString().slice(0,19).replaceAll(":","-");
+      downloadTextFile(`padel_export_${stamp}.csv`, lines.join("\n"), "text/csv;charset=utf-8");
+    }
+
+    function resetAll() {
+      if (!confirm("Esto borrará TODO. ¿Seguro?")) return;
+      localStorage.removeItem(STORAGE_KEY);
+      location.reload();
+    }
+
+    function bindEvents() {
+      $$(".tab").forEach(btn => btn.addEventListener("click", () => setTab(btn.dataset.tab)));
+
+      $("#btnAddPlayer").addEventListener("click", addPlayer);
+      $("#btnBulkImport").addEventListener("click", bulkImport);
+      $("#btnBulkClear").addEventListener("click", () => $("#bulkImport").value = "");
+
+      // ✅ Botones: seleccionar/deseleccionar todas las jugadoras (pestaña "Jornada")
+      // - "Seleccionar todas": marca todas las jugadoras disponibles en la jornada
+      // - "Quitar selección": deja la selección vacía
+      $("#btnSelectAllPlayers").addEventListener("click", () => {
+        const j = ensureCurrentJournalDraft();
+        j.includeIds = db.players.map(p => p.id);
+        save(); // guarda y repinta (verás todos los checks marcados)
+      });
+
+      $("#btnClearSelectedPlayers").addEventListener("click", () => {
+        const j = ensureCurrentJournalDraft();
+        j.includeIds = [];
+        save(); // guarda y repinta (verás todos los checks desmarcados)
+      });
+
+
+      $("#matchCount").addEventListener("input", renderPlanDerived);
+      $("#courtCount").addEventListener("input", renderPlanDerived);
+
+      $("#btnBuildSchedule").addEventListener("click", buildSchedule);
+      $("#btnClearSchedule").addEventListener("click", clearSchedule);
+
+      $("#btnStart").addEventListener("click", startTimer);
+      $("#btnPause").addEventListener("click", pauseTimer);
+      $("#btnResetTimer").addEventListener("click", resetTimer);
+
+      $("#btnSaveResult").addEventListener("click", saveResultForCurrentRound);
+      $("#btnNextMatch").addEventListener("click", goNextRound);
+
+      $("#btnGoRanking").addEventListener("click", () => setTab("ranking"));
+      $("#btnRecalcRanking").addEventListener("click", () => renderRanking());
+
+      $("#btnExport").addEventListener("click", exportData);
+      $("#btnExportCSV").addEventListener("click", exportCSV);
+      $("#btnReset").addEventListener("click", resetAll);
+
+      // ✅ Cerrar panel de detalle de jornada
+      $("#btnClearJournalDetail").addEventListener("click", () => {
+        selectedJournalId = null;
+        renderJournalDetail();
+      });
+    }
+
+    function initDefaults() {
+      if (!$("#courtCount").value) $("#courtCount").value = "1";
+      if (!$("#includeCount").value) $("#includeCount").value = "8";
+      if (!$("#matchCount").value) $("#matchCount").value = "6";
+      renderPlanDerived();
+      if (!$("#resultDate").value) $("#resultDate").value = new Date().toISOString().slice(0,10);
+    }
+
+    function init() {
+      load();
+      bindEvents();
+      initDefaults();
+      setTab("setup");
+      renderAll();
+
+      const j = getCurrentJournal();
+      setTimerSeconds(j?.durationSec || 0);
+    }
+
+    init();
+  
+
+
+/***********************************************************************
+ * 📲 PWA: instalación + Service Worker
+ ***********************************************************************/
+let deferredInstallPrompt = null;
+
+window.addEventListener("beforeinstallprompt", (e) => {
+  // Android/Chrome: capturamos el evento para mostrar nuestro propio botón
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  const b = document.getElementById("btnInstall");
+  if (b) b.classList.remove("hidden");
+});
+
+document.getElementById("btnInstall")?.addEventListener("click", async () => {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  try { await deferredInstallPrompt.userChoice; } catch (e) {}
+  deferredInstallPrompt = null;
+  document.getElementById("btnInstall")?.classList.add("hidden");
+});
+
+// iOS no lanza beforeinstallprompt. Aquí podrías mostrar un aviso,
+// pero para “modo dummies” lo dejamos como instrucción en el README.
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js").catch(console.warn);
+  });
+}
+
+/***********************************************************************
+ * 📥 IMPORTAR (JSON) — mismo formato que Exportar
+ ***********************************************************************/
+function isValidDbShape(obj) {
+  if (!obj || typeof obj !== "object") return false;
+  // Permitimos que falten algunas claves, pero al menos deben existir players y journals.
+  if (!Array.isArray(obj.players)) return false;
+  if (!Array.isArray(obj.journals)) return false;
+  return true;
+}
+
+function normalizeImportedDb(obj) {
+  // Mantiene la estructura mínima y añade defaults por si faltan campos.
+  return {
+    players: Array.isArray(obj.players) ? obj.players : [],
+    pairHistory: Array.isArray(obj.pairHistory) ? obj.pairHistory : [],
+    journals: Array.isArray(obj.journals) ? obj.journals : [],
+    currentJournalId: obj.currentJournalId ?? null
+  };
+}
+
+async function importDataFromFile(file) {
+  const text = await file.text();
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (e) {
+    alert("El archivo no es un JSON válido.");
+    return;
+  }
+  if (!isValidDbShape(parsed)) {
+    alert("El JSON no tiene el formato esperado (players/journals).");
+    return;
+  }
+  // Confirmación simple para evitar sobrescribir sin querer.
+  const ok = confirm("Esto reemplazará tus datos actuales por los del archivo. ¿Continuar?");
+  if (!ok) return;
+
+  db = { ...db, ...normalizeImportedDb(parsed) };
+  save();
+  alert("Importación completada ✅");
+}
+
+document.getElementById("btnImport")?.addEventListener("click", () => {
+  document.getElementById("fileImport")?.click();
+});
+
+document.getElementById("fileImport")?.addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  await importDataFromFile(file);
+  // Permite volver a importar el mismo archivo si hace falta
+  e.target.value = "";
+});
+</script>
+</body>
+</html>
