@@ -515,6 +515,17 @@ Cris,C" rows="4"></textarea>
       <div class="mt-3">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <h3 class="text-lg font-semibold">Parejas generadas</h3>
+          <div class="flex items-center gap-4">
+            <span class="text-sm font-medium text-slate-700">Modo:</span>
+            <label class="inline-flex items-center gap-2 text-sm">
+              <input type="radio" name="vMode" value="auto" class="h-4 w-4 accent-sky-600" checked>
+              <span>Automático</span>
+            </label>
+            <label class="inline-flex items-center gap-2 text-sm">
+              <input type="radio" name="vMode" value="manual" class="h-4 w-4 accent-sky-600">
+              <span>Manual</span>
+            </label>
+          </div>
           <span class="text-sm text-slate-600">Reglas: 5 partidos, umbrales 75/80/85/90/95</span>
         </div>
 
@@ -562,7 +573,7 @@ Cris,C" rows="4"></textarea>
      ***********************************************************************/
 
     const STORAGE_KEY = "padel_jornada_manager_v2_courts";
-    let db = { players: [], pairHistory: [], journals: [], currentJournalId: null, veteranasPlayers: [], veteranasPairs: [], veteranasSeen: [], veteranasMeta: { noMore: false, lastMsg: "" } };
+    let db = { players: [], pairHistory: [], journals: [], currentJournalId: null, veteranasPlayers: [], veteranasPairs: [], veteranasSeen: [], veteranasMeta: { noMore: false, lastMsg: "" }, veteranasMode: "auto", veteranasManual: { slots: [], pairs: [], msg: "" } };
 
     // ✅ Estado de UI: qué jornada estamos viendo en detalle (no hace falta guardarlo en LocalStorage)
     let selectedJournalId = null;
@@ -2339,6 +2350,170 @@ function eligibleVetsPlayers() {
   return getVetsPlayers().filter(p => (p.selected !== false) && Number.isFinite(p.age) && p.age !== null);
 }
 
+function ensureVeteranasState() {
+  if (!db.veteranasMode) db.veteranasMode = "auto";
+  if (!db.veteranasManual) db.veteranasManual = { slots: [], pairs: [], msg: "" };
+  if (!Array.isArray(db.veteranasManual.slots)) db.veteranasManual.slots = [];
+  if (!Array.isArray(db.veteranasPairs)) db.veteranasPairs = [];
+  if (!Array.isArray(db.veteranasSeen)) db.veteranasSeen = [];
+  if (!db.veteranasMeta) db.veteranasMeta = { noMore: false, lastMsg: "" };
+}
+
+function initVeteranasManualSlots() {
+  ensureVeteranasState();
+  const slots = db.veteranasManual.slots;
+  while (slots.length < VET_THRESHOLDS.length) slots.push({ L: null, R: null });
+  if (slots.length > VET_THRESHOLDS.length) slots.length = VET_THRESHOLDS.length;
+  // Normalizar valores vacíos
+  for (const s of slots) {
+    if (!s.L) s.L = null;
+    if (!s.R) s.R = null;
+  }
+  db.veteranasManual.slots = slots;
+  return slots;
+}
+
+function canPlayLeft(p) { return p && (p.side === "L" || p.side === "J"); }
+function canPlayRight(p) { return p && (p.side === "R" || p.side === "J"); }
+function orientedOk(L, R) { return canPlayLeft(L) && canPlayRight(R); }
+
+// Completa SOLO los huecos libres respetando las selecciones manuales.
+// Devuelve { ok, slots, reason }
+function solveVeteranasFillHoles(players, slotsIn, thresholds = VET_THRESHOLDS) {
+  const byId = new Map(players.map(p => [p.id, p]));
+  const slots = slotsIn.map(s => ({ L: s.L || null, R: s.R || null }));
+
+  // Validar duplicados en fijos
+  const fixedIds = [];
+  for (const s of slots) { if (s.L) fixedIds.push(s.L); if (s.R) fixedIds.push(s.R); }
+  const dup = fixedIds.find((id, i) => fixedIds.indexOf(id) !== i);
+  if (dup) return { ok: false, reason: "Hay una jugadora seleccionada más de una vez en modo manual." };
+
+  // Validar fijos contra reglas/umbrales
+  for (let i = 0; i < thresholds.length; i++) {
+    const th = thresholds[i];
+    const s = slots[i];
+    if (s.L && !byId.has(s.L)) return { ok: false, reason: "Selección manual inválida (jugadora no disponible/seleccionada)." };
+    if (s.R && !byId.has(s.R)) return { ok: false, reason: "Selección manual inválida (jugadora no disponible/seleccionada)." };
+    if (s.L && s.R) {
+      const L = byId.get(s.L), R = byId.get(s.R);
+      if (!orientedOk(L, R)) return { ok: false, reason: `La Pareja ${i+1} no cumple Izquierda/Derecha con tus selecciones.` };
+      const sum = L.age + R.age;
+      if (sum < th) return { ok: false, reason: `La Pareja ${i+1} no cumple el umbral de edad (${sum} < ${th}).` };
+    }
+  }
+
+  // Orden de resolución: umbrales altos primero para facilitar.
+  const order = thresholds.map((th, idx) => ({ th, idx })).sort((a, b) => b.th - a.th);
+
+  const used = new Set(fixedIds);
+
+  function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function candidatesForMissing(idx, missingSide) {
+    const th = thresholds[idx];
+    const s = slots[idx];
+    const fixedId = (missingSide === "L") ? s.R : s.L;
+    const fixed = fixedId ? byId.get(fixedId) : null;
+
+    const pool = players.filter(p => !used.has(p.id));
+    const roleOk = (p) => (missingSide === "L" ? canPlayLeft(p) : canPlayRight(p));
+    const oriented = (p) => {
+      const L = (missingSide === "L") ? p : fixed;
+      const R = (missingSide === "L") ? fixed : p;
+      return orientedOk(L, R) && ((L.age + R.age) >= th);
+    };
+    return shuffle(pool.filter(p => roleOk(p) && oriented(p)));
+  }
+
+  function candidatesForEmptyPair(idx) {
+    const th = thresholds[idx];
+    const pool = players.filter(p => !used.has(p.id));
+    const lefts = pool.filter(canPlayLeft);
+    const rights = pool.filter(canPlayRight);
+    const out = [];
+    for (const L of lefts) {
+      for (const R of rights) {
+        if (L.id === R.id) continue;
+        if (!orientedOk(L, R)) continue;
+        const sum = L.age + R.age;
+        if (sum < th) continue;
+        out.push({ LId: L.id, RId: R.id, sum });
+      }
+    }
+    // aleatorio + preferir mínimos para conservar edades altas
+    out.sort((a,b)=>a.sum-b.sum);
+    return shuffle(out).slice(0, Math.min(2000, out.length)); // limit defensivo
+  }
+
+  function rec(k) {
+    if (k === order.length) return true;
+    const { idx } = order[k];
+    const s = slots[idx];
+
+    // Ya completo (fijo o completado) -> marcar usados y seguir
+    if (s.L && s.R) return rec(k + 1);
+
+    // Solo falta un lado
+    if (s.L && !s.R) {
+      const fixedL = byId.get(s.L);
+      if (!canPlayLeft(fixedL)) return false;
+      const th = thresholds[idx];
+      const pool = players.filter(p => !used.has(p.id) && (canPlayRight(p)));
+      const cands = shuffle(pool.filter(R => orientedOk(fixedL, R) && (fixedL.age + R.age) >= th));
+      for (const R of cands) {
+        s.R = R.id;
+        used.add(R.id);
+        if (rec(k + 1)) return true;
+        used.delete(R.id);
+        s.R = null;
+      }
+      return false;
+    }
+    if (!s.L && s.R) {
+      const fixedR = byId.get(s.R);
+      if (!canPlayRight(fixedR)) return false;
+      const th = thresholds[idx];
+      const pool = players.filter(p => !used.has(p.id) && (canPlayLeft(p)));
+      const cands = shuffle(pool.filter(L => orientedOk(L, fixedR) && (L.age + fixedR.age) >= th));
+      for (const L of cands) {
+        s.L = L.id;
+        used.add(L.id);
+        if (rec(k + 1)) return true;
+        used.delete(L.id);
+        s.L = null;
+      }
+      return false;
+    }
+
+    // Ninguno elegido
+    const pairCands = candidatesForEmptyPair(idx);
+    for (const cand of pairCands) {
+      if (used.has(cand.LId) || used.has(cand.RId)) continue;
+      s.L = cand.LId; s.R = cand.RId;
+      used.add(cand.LId); used.add(cand.RId);
+      if (rec(k + 1)) return true;
+      used.delete(cand.LId); used.delete(cand.RId);
+      s.L = null; s.R = null;
+    }
+    return false;
+  }
+
+  // Marcar usados fijos (los de slots completos ya están en used, los parciales están incluidos)
+  // Para parciales: si s.L o s.R está fijo, ya está en used.
+  const ok = rec(0);
+  if (!ok) return { ok: false, reason: "No es posible completar las parejas con la selección actual." };
+  return { ok: true, slots };
+}
+
+
 function isValidPair(a, b) {
   // Reglas de posiciones: una izquierda y una derecha; comodín vale para ambos.
   const sa = a.side, sb = b.side;
@@ -2471,7 +2646,7 @@ function solveVeteranas(players, thresholds = VET_THRESHOLDS, excludeSigs = new 
   return { ok: true, pairs: ordered, sig: solutionSignatureFromPairs(chosen) };
 }
 
-function recalcVeteranas() {
+function recalcVeteranasAuto() {
   const players = eligibleVetsPlayers();
 
   // Reiniciamos estado de mensajes
@@ -2519,6 +2694,37 @@ function recalcVeteranas() {
   if (res.sig) db.veteranasSeen.push(res.sig);
   save();
 }
+
+function recalcVeteranasManual() {
+  ensureVeteranasState();
+  const players = eligibleVetsPlayers();
+  const slots = initVeteranasManualSlots();
+
+  if (players.length < 10) {
+    db.veteranasManual.msg = `Necesitas al menos 10 jugadoras con edad. Ahora mismo: ${players.length}.`;
+    save();
+    return;
+  }
+
+  const res = solveVeteranasFillHoles(players, slots, VET_THRESHOLDS);
+  if (!res.ok) {
+    db.veteranasManual.msg = res.reason || "No es posible completar las parejas con la selección actual.";
+    save();
+    return;
+  }
+
+  db.veteranasManual.slots = res.slots;
+  db.veteranasManual.msg = "";
+  save();
+}
+
+function recalcVeteranas() {
+  ensureVeteranasState();
+  const mode = db.veteranasMode || "auto";
+  if (mode === "manual") return recalcVeteranasManual();
+  return recalcVeteranasAuto();
+}
+
 
 function renderVeteranas() {
   // Safeguard if elements not present yet
@@ -2569,16 +2775,181 @@ function renderVeteranas() {
     });
   });
 
-  // Render pairs
+  // Render pairs (Auto / Manual)
   const wrap = document.getElementById("vPairsWrap");
   const msg = document.getElementById("vPairsMsg");
   wrap.innerHTML = "";
 
-  const pairs = Array.isArray(db.veteranasPairs) ? db.veteranasPairs : [];
+  ensureVeteranasState();
+
+  const mode = db.veteranasMode || "auto";
+  // Sync radio UI + bind events
+  document.querySelectorAll('input[name="vMode"]').forEach(r => {
+    r.checked = (r.value === mode);
+    r.onchange = () => {
+      db.veteranasMode = r.value;
+      // Limpieza de mensajes para no confundir
+      if (!db.veteranasMeta) db.veteranasMeta = { noMore: false, lastMsg: "" };
+      db.veteranasMeta.noMore = false;
+      db.veteranasMeta.lastMsg = "";
+      // En manual, no tocamos slots; en auto, no tocamos manual.
+      save();
+    };
+  });
+
   if (elig.length < 10) {
     msg.innerHTML = `Necesitas al menos <b>10 jugadoras con edad</b> para generar 5 parejas. Ahora mismo: <b>${elig.length}</b>.`;
     return;
   }
+
+  if (mode === "manual") {
+    // --- MANUAL MODE ---
+    const slots = initVeteranasManualSlots(); // always 5 items
+    const byId = new Map(elig.map(p => [p.id, p]));
+
+    // Helper: compute used ids across all slots (excluding optionally one)
+    function usedIds(exceptId) {
+      const u = new Set();
+      slots.forEach(s => {
+        if (s.L && s.L !== exceptId) u.add(s.L);
+        if (s.R && s.R !== exceptId) u.add(s.R);
+      });
+      return u;
+    }
+
+    function canPlayLeft(p) { return p && (p.side === "L" || p.side === "J"); }
+    function canPlayRight(p){ return p && (p.side === "R" || p.side === "J"); }
+    function orientedOk(L, R) { return canPlayLeft(L) && canPlayRight(R); }
+
+    function candidatesFor(pairIdx, which) {
+      const th = VET_THRESHOLDS[pairIdx];
+      const s = slots[pairIdx];
+      const current = (which === "L") ? s.L : s.R;
+      const otherId = (which === "L") ? s.R : s.L;
+      const other = otherId ? byId.get(otherId) : null;
+
+      const used = usedIds(current);
+      const pool = elig.filter(p => !used.has(p.id));
+
+      const roleOk = (p) => (which === "L" ? canPlayLeft(p) : canPlayRight(p));
+      const partnerRoleOk = (p) => (which === "L" ? canPlayRight(p) : canPlayLeft(p));
+
+      // If other side fixed, only show candidates that make sum>=th with correct orientation
+      if (other) {
+        return pool.filter(p => {
+          if (!roleOk(p)) return false;
+          const L = (which === "L") ? p : other;
+          const R = (which === "L") ? other : p;
+          if (!orientedOk(L, R)) return false;
+          return (L.age + R.age) >= th;
+        }).sort((a,b)=>a.age-b.age);
+      }
+
+      // Other side empty: candidate must be roleOk AND there exists at least one partner remaining that can satisfy threshold.
+      return pool.filter(p => {
+        if (!roleOk(p)) return false;
+        const remaining = pool.filter(x => x.id !== p.id);
+        const possiblePartners = remaining.filter(pp => partnerRoleOk(pp));
+        for (const pp of possiblePartners) {
+          const L = (which === "L") ? p : pp;
+          const R = (which === "L") ? pp : p;
+          if (!orientedOk(L, R)) continue;
+          if ((L.age + R.age) >= th) return true;
+        }
+        return false;
+      }).sort((a,b)=>a.age-b.age);
+    }
+
+    function renderSelect(pairIdx, which) {
+      const s = slots[pairIdx];
+      const selectedId = (which === "L") ? s.L : s.R;
+      const cands = candidatesFor(pairIdx, which);
+
+      // If currently selected id is no longer in candidates (e.g. due to used elsewhere), still show it to avoid "jump"
+      const selectedPlayer = selectedId ? byId.get(selectedId) : null;
+      const options = [];
+      options.push(`<option value="">—</option>`);
+      if (selectedPlayer && !cands.some(p=>p.id===selectedId)) {
+        options.push(`<option value="${selectedId}">${escapeHtml(selectedPlayer.name)} · ${sideLabel(selectedPlayer.side)} · ${selectedPlayer.age}</option>`);
+      }
+      cands.forEach(p => {
+        options.push(`<option value="${p.id}">${escapeHtml(p.name)} · ${sideLabel(p.side)} · ${p.age}</option>`);
+      });
+
+      const label = (which === "L") ? "Izquierda / Comodín" : "Derecha / Comodín";
+      const selId = `vMan_${pairIdx}_${which}`;
+      return `
+        <div>
+          <label class="text-xs font-medium text-slate-600">${label}</label>
+          <select id="${selId}" class="mt-1 w-full border rounded-xl px-3 py-2">
+            ${options.join("")}
+          </select>
+        </div>
+      `;
+    }
+
+    function pairStatus(pairIdx) {
+      const th = VET_THRESHOLDS[pairIdx];
+      const s = slots[pairIdx];
+      const L = s.L ? byId.get(s.L) : null;
+      const R = s.R ? byId.get(s.R) : null;
+      if (!L || !R) return { text: "Incompleta", ok: false, sum: null };
+      const sum = (L.age + R.age);
+      const ok = sum >= th;
+      return { text: `${sum} años`, ok, sum };
+    }
+
+    // Build UI cards
+    wrap.innerHTML = VET_THRESHOLDS.map((th, i) => {
+      const st = pairStatus(i);
+      const badge = st.sum === null
+        ? `<span class="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200">Pendiente</span>`
+        : (st.ok
+            ? `<span class="text-xs px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">OK</span>`
+            : `<span class="text-xs px-2 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200">No cumple</span>`);
+      const sumTxt = (st.sum === null) ? "" : `<span class="text-sm font-semibold">${st.text}</span>`;
+      return `
+        <div class="border rounded-2xl p-4 bg-slate-50">
+          <div class="flex items-center justify-between gap-2">
+            <div class="font-semibold">Pareja ${i+1} (≥ ${th} años)</div>
+            <div class="flex items-center gap-2">${sumTxt}${badge}</div>
+          </div>
+          <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            ${renderSelect(i, "L")}
+            ${renderSelect(i, "R")}
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    // Bind select change events
+    VET_THRESHOLDS.forEach((th, i) => {
+      ["L","R"].forEach(which => {
+        const sel = document.getElementById(`vMan_${i}_${which}`);
+        if (!sel) return;
+        const s = slots[i];
+        const current = which==="L" ? s.L : s.R;
+        sel.value = current || "";
+        sel.onchange = () => {
+          const val = sel.value || null;
+          if (which==="L") s.L = val; else s.R = val;
+          db.veteranasManual.slots = slots;
+          db.veteranasManual.msg = "";
+          // Si el usuario cambia manualmente, reiniciamos el "noMore" del auto para no mezclar mensajes.
+          if (!db.veteranasMeta) db.veteranasMeta = { noMore: false, lastMsg: "" };
+          db.veteranasMeta.noMore = false;
+          db.veteranasMeta.lastMsg = "";
+          save();
+        };
+      });
+    });
+
+    msg.textContent = db.veteranasManual?.msg || "";
+    return;
+  }
+
+  // --- AUTO MODE (existing behaviour) ---
+  const pairs = Array.isArray(db.veteranasPairs) ? db.veteranasPairs : [];
 
   if (!pairs.length) {
     if (db.veteranasMeta && db.veteranasMeta.noMore) {
@@ -2604,25 +2975,26 @@ function renderVeteranas() {
     return `
       <div class="border rounded-2xl p-4 bg-slate-50">
         <div class="flex flex-wrap items-center justify-between gap-2">
-          <div class="font-semibold">Pareja ${i + 1} <span class="text-slate-600 font-normal">(≥ ${p.threshold} años)</span></div>
+          <div class="font-semibold">Pareja ${i + 1} (≥ ${p.threshold} años)</div>
           <div class="flex items-center gap-2">
-            <div class="text-sm text-slate-700"><b>${sum}</b> años</div>
+            <span class="text-sm font-semibold">${sum} años</span>
             ${okBadge}
           </div>
         </div>
-        <div class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-          <div class="bg-white rounded-xl border p-3">
+        <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="bg-white border rounded-xl p-3">
             <div class="font-medium">${escapeHtml(a.name)}</div>
-            <div class="text-slate-600">${sideLabel(a.side)} · ${a.age} años</div>
+            <div class="text-xs text-slate-600">${sideLabel(a.side)} · ${a.age} años</div>
           </div>
-          <div class="bg-white rounded-xl border p-3">
+          <div class="bg-white border rounded-xl p-3">
             <div class="font-medium">${escapeHtml(b.name)}</div>
-            <div class="text-slate-600">${sideLabel(b.side)} · ${b.age} años</div>
+            <div class="text-xs text-slate-600">${sideLabel(b.side)} · ${b.age} años</div>
           </div>
         </div>
       </div>
     `;
   }).join("");
+
 }
 
 // Eventos UI Veteranas
