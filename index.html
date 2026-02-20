@@ -2336,6 +2336,72 @@ function deleteVetsPlayer(id) {
   save();
 }
 
+
+
+function editVetsPlayerPrompt(id) {
+  const p = getVetsPlayers().find(x => x.id === id);
+  if (!p) return;
+
+  // Nombre (no obligatorio cambiarlo, pero lo permitimos)
+  const name = prompt("Nombre:", p.name);
+  if (name === null) return;
+
+  const sideInput = prompt("Posición (I=Izquierda, D=Derecha, C=Comodín):", (p.side === "L" ? "I" : p.side === "R" ? "D" : "C"));
+  if (sideInput === null) return;
+  const s = sideInput.trim().toUpperCase();
+  let side = p.side;
+  if (["I","IZQ","IZQUIERDA","L"].includes(s)) side = "L";
+  else if (["D","DER","DERECHA","R"].includes(s)) side = "R";
+  else if (["C","COMODIN","COMODÍN","J"].includes(s)) side = "J";
+  else return alert("Posición inválida. Usa I, D o C.");
+
+  const ageInput = prompt("Edad (deja vacío si no quieres poner edad):", (Number.isFinite(p.age) ? String(p.age) : ""));
+  if (ageInput === null) return;
+  let age = null;
+  const t = ageInput.trim();
+  if (t !== "") {
+    const n = Number(t);
+    if (!Number.isFinite(n) || n < 1 || n > 120) return alert("Edad inválida.");
+    age = Math.floor(n);
+  }
+
+  // Actualiza
+  p.name = name.trim() || p.name;
+  p.side = side;
+  p.age = age;
+
+  // Si se queda sin edad, no es elegible para Veteranas
+  if (!Number.isFinite(p.age)) {
+    p.selected = false;
+  }
+
+  // Si la jugadora estaba usada en parejas/slots, limpiamos para evitar inconsistencias.
+  const usedInAuto = Array.isArray(db.veteranasPairs) && db.veteranasPairs.some(pair => pair && pair.players && pair.players.some(pl => pl && pl.id === id));
+  const usedInManual = db.veteranasManual && db.veteranasManual.slots && db.veteranasManual.slots.some(slt => slt && (slt.L === id || slt.R === id));
+  if (usedInAuto) {
+    db.veteranasPairs = [];
+  }
+  if (usedInManual) {
+    db.veteranasManual.slots = initVeteranasManualSlots().map((slot, i) => {
+      const cur = db.veteranasManual.slots[i] || slot;
+      return {
+        ...cur,
+        L: (cur.L === id ? null : cur.L),
+        R: (cur.R === id ? null : cur.R)
+      };
+    });
+  }
+  // En cualquier caso, reiniciamos "seen" y mensajes porque cambió el espacio de búsqueda
+  db.veteranasSeen = [];
+  if (db.veteranasMeta) { db.veteranasMeta.noMore = false; db.veteranasMeta.lastMsg = ""; }
+
+  save();
+  if (usedInAuto || usedInManual) {
+    // Mensaje suave (no bloqueante)
+    setTimeout(() => alert("Cambios guardados. Se han limpiado algunas selecciones/parejas porque la jugadora estaba siendo utilizada."), 0);
+  }
+}
+
 function clearVetsPlayers() {
   const ok = confirm("¿Borrar la lista de jugadoras para Veteranas?");
   if (!ok) return;
@@ -2750,6 +2816,7 @@ function renderVeteranas() {
         <td class="py-2 pr-3">${sideLabel(p.side)}</td>
         <td class="py-2 pr-3">${age} ${badge}</td>
         <td class="py-2 pr-0 text-right">
+          <button class="btn-secondary px-3 py-1.5 rounded-lg text-xs font-medium mr-2" data-vedit="${p.id}">Editar</button>
           <button class="btn-danger px-3 py-1.5 rounded-lg text-xs font-medium" data-vdel="${p.id}">Eliminar</button>
         </td>
       </tr>`;
@@ -2758,6 +2825,10 @@ function renderVeteranas() {
   // bind delete buttons
   tbody.querySelectorAll("[data-vdel]").forEach(btn => {
     btn.addEventListener("click", () => deleteVetsPlayer(btn.getAttribute("data-vdel")));
+  });
+  // bind edit buttons
+  tbody.querySelectorAll("[data-vedit]").forEach(btn => {
+    btn.addEventListener("click", () => editVetsPlayerPrompt(btn.getAttribute("data-vedit")));
   });// bind selection checkboxes
   tbody.querySelectorAll("[data-vsel]").forEach(chk => {
     chk.addEventListener("change", () => {
