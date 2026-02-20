@@ -515,7 +515,19 @@ Cris,C" rows="4"></textarea>
       <div class="mt-3">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <h3 class="text-lg font-semibold">Parejas generadas</h3>
-          <span class="text-sm text-slate-600">Reglas: 5 partidos, umbrales 75/80/85/90/95</span>
+          <div class="flex flex-wrap items-center gap-3 justify-end">
+            <div class="flex items-center gap-2 text-sm">
+              <label class="inline-flex items-center gap-2 cursor-pointer">
+                <input id="vModeAuto" type="radio" name="vMode" value="auto" class="accent-sky-600">
+                <span>Automático</span>
+              </label>
+              <label class="inline-flex items-center gap-2 cursor-pointer">
+                <input id="vModeManual" type="radio" name="vMode" value="manual" class="accent-sky-600">
+                <span>Manual</span>
+              </label>
+            </div>
+            <span class="text-sm text-slate-600">Reglas: 5 partidos, umbrales 75/80/85/90/95</span>
+          </div>
         </div>
 
         <div class="mt-3 space-y-3" id="vPairsWrap"></div>
@@ -2319,6 +2331,7 @@ function addVetsPlayer() {
 
 function deleteVetsPlayer(id) {
   db.veteranasPlayers = getVetsPlayers().filter(p => p.id !== id);
+  removeFromManualSlots(id);
   db.veteranasPairs = [];
   db.veteranasSeen = [];
   if (db.veteranasMeta) { db.veteranasMeta.noMore = false; db.veteranasMeta.lastMsg = ""; }
@@ -2328,6 +2341,7 @@ function deleteVetsPlayer(id) {
 function clearVetsPlayers() {
   const ok = confirm("¿Borrar la lista de jugadoras para Veteranas?");
   if (!ok) return;
+  clearManualSlots();
   db.veteranasPlayers = [];
   db.veteranasPairs = [];
   db.veteranasSeen = [];
@@ -2377,6 +2391,7 @@ function solutionSignatureFromPairs(pairs) {
   return parts.join("|");
 }
 
+
 function shuffleArray(arr) {
   // Fisher–Yates
   for (let i = arr.length - 1; i > 0; i--) {
@@ -2386,127 +2401,278 @@ function shuffleArray(arr) {
   return arr;
 }
 
-function solveVeteranas(players, thresholds = VET_THRESHOLDS, excludeSigs = new Set()) {
-  // Backtracking: asigna 5 parejas sin solape cumpliendo umbrales.
-  // Además: evita repetir soluciones ya vistas (excludeSigs).
-  const byId = new Map(players.map(p => [p.id, p]));
-  const allPairs = makePairsFromPlayers(players);
+function ensureVetsState() {
+  db.veteranasMode = db.veteranasMode || "auto"; // "auto" | "manual"
+  db.veteranasManualSlots = Array.isArray(db.veteranasManualSlots) ? db.veteranasManualSlots : [];
+  // 5 pares (75..95)
+  for (let i = 0; i < VET_THRESHOLDS.length; i++) {
+    if (!db.veteranasManualSlots[i]) db.veteranasManualSlots[i] = { lId: null, rId: null };
+    if (!("lId" in db.veteranasManualSlots[i])) db.veteranasManualSlots[i].lId = null;
+    if (!("rId" in db.veteranasManualSlots[i])) db.veteranasManualSlots[i].rId = null;
+  }
+  db.veteranasSeen = Array.isArray(db.veteranasSeen) ? db.veteranasSeen : [];
+  db.veteranasMeta = db.veteranasMeta || { noMore: false, lastMsg: "" };
+}
 
-  // Candidatos por umbral (buscamos de mayor a menor para garantizar 95 primero, etc.)
-  const thDesc = [...thresholds].sort((x, y) => y - x);
-  const candidates = new Map();
-  for (const th of thDesc) {
-    const c = allPairs
-      .filter(p => p.sum >= th)
-      .sort((p1, p2) => p1.sum - p2.sum); // preferimos mínimos para conservar edades altas
-    candidates.set(th, c);
+function getVetsMode() {
+  ensureVetsState();
+  return db.veteranasMode || "auto";
+}
+
+function setVetsMode(mode) {
+  ensureVetsState();
+  db.veteranasMode = mode === "manual" ? "manual" : "auto";
+  // Al cambiar modo, invalidamos solución actual y el historial de soluciones
+  db.veteranasPairs = [];
+  db.veteranasSeen = [];
+  db.veteranasMeta.noMore = false;
+  db.veteranasMeta.lastMsg = "";
+  save();
+}
+
+function clearManualSlots() {
+  ensureVetsState();
+  db.veteranasManualSlots = VET_THRESHOLDS.map(() => ({ lId: null, rId: null }));
+  db.veteranasPairs = [];
+  db.veteranasSeen = [];
+  db.veteranasMeta.noMore = false;
+  db.veteranasMeta.lastMsg = "";
+  save();
+
+function removeFromManualSlots(id) {
+  ensureVetsState();
+  db.veteranasManualSlots.forEach(s => {
+    if (s.lId === id) s.lId = null;
+    if (s.rId === id) s.rId = null;
+  });
+}
+}
+
+function signatureWithIndexes(pairsByIndex) {
+  // pairsByIndex: array length 5 with {aId,bId} (order independent)
+  const parts = pairsByIndex.map((p, idx) => {
+    const ids = [p.aId, p.bId].filter(Boolean).sort();
+    return `${idx}:${ids.join("-")}`;
+  });
+  return parts.join("|");
+}
+
+function isAllowedLeft(player) {
+  return player.side === "L" || player.side === "J";
+}
+function isAllowedRight(player) {
+  return player.side === "R" || player.side === "J";
+}
+
+function buildAllOrientedPairs(players) {
+  // Genera pares ORIENTADOS (L-slot y R-slot) para facilitar modo manual.
+  // Para J+J, generamos solo una orientación (a,b) para no duplicar.
+  const oriented = [];
+  for (let i = 0; i < players.length; i++) {
+    for (let j = 0; j < players.length; j++) {
+      if (i === j) continue;
+      const a = players[i], b = players[j];
+      if (!isAllowedLeft(a) || !isAllowedRight(b)) continue;
+      if (!isValidPair(a, b)) continue;
+      if (a.side === "J" && b.side === "J" && j < i) continue; // evitar duplicado para J+J
+      oriented.push({ lId: a.id, rId: b.id, sum: (a.age || 0) + (b.age || 0) });
+    }
+  }
+  return oriented;
+}
+
+function solveVeteranasWithFixed(players, thresholds = VET_THRESHOLDS, fixedSlots = null, excludeSigs = new Set()) {
+  // fixedSlots: array len=5 of {lId,rId} where any can be null.
+  const byId = new Map(players.map(p => [p.id, p]));
+  const fixed = fixedSlots ? fixedSlots.map(x => ({ lId: x?.lId || null, rId: x?.rId || null })) : thresholds.map(() => ({ lId: null, rId: null }));
+
+  // Validación rápida de duplicados en fixed
+  const fixedIds = [];
+  fixed.forEach(s => { if (s.lId) fixedIds.push(s.lId); if (s.rId) fixedIds.push(s.rId); });
+  const dup = fixedIds.find((id, idx) => fixedIds.indexOf(id) !== idx);
+  if (dup) return { ok: false, pairs: [], noMore: false, reason: "Una jugadora está asignada en más de un hueco manual." };
+
+  // Validación de pares completos en fixed
+  for (let i = 0; i < thresholds.length; i++) {
+    const th = thresholds[i];
+    const s = fixed[i];
+    if (s.lId && s.rId) {
+      const a = byId.get(s.lId), b = byId.get(s.rId);
+      if (!a || !b) return { ok: false, pairs: [], noMore: false, reason: "Hay selecciones manuales con jugadoras no válidas." };
+      if (!isValidPair(a, b)) return { ok: false, pairs: [], noMore: false, reason: `La pareja ${i + 1} no cumple Izquierda/Derecha (comodín vale para ambas).` };
+      const sum = (a.age || 0) + (b.age || 0);
+      if (sum < th) return { ok: false, pairs: [], noMore: false, reason: `La pareja ${i + 1} no alcanza el umbral de edad (≥ ${th}).` };
+    }
   }
 
-  const used = new Set();
-  const chosen = [];
+  const orientedPairs = buildAllOrientedPairs(players);
+
+  // Orden de asignación: empezamos por umbral mayor
+  const order = thresholds.map((th, idx) => ({ th, idx })).sort((a, b) => b.th - a.th);
+
+  const used = new Set(fixedIds);
+  const chosen = Array(thresholds.length).fill(null); // por índice original 0..4
+
+  // Pre-cargar los completos
+  for (let i = 0; i < thresholds.length; i++) {
+    const s = fixed[i];
+    if (s.lId && s.rId) {
+      const a = byId.get(s.lId), b = byId.get(s.rId);
+      chosen[i] = { threshold: thresholds[i], l: a, r: b, sum: (a.age || 0) + (b.age || 0) };
+    }
+  }
 
   function rec(k) {
-    if (k === thDesc.length) {
-      const sig = solutionSignatureFromPairs(chosen);
+    if (k === order.length) {
+      const sig = signatureWithIndexes(chosen.map((p) => ({ aId: p?.l?.id || null, bId: p?.r?.id || null })));
       if (excludeSigs.has(sig)) return false;
       return true;
     }
 
-    const th = thDesc[k];
-    const cands = candidates.get(th);
+    const { th, idx } = order[k];
+    if (chosen[idx]) return rec(k + 1); // ya fijada
 
-    // Aleatorizamos un poco para que "Recalcular" proponga alternativas.
-    const cands2 = shuffleArray([...cands]);
+    const slot = fixed[idx];
+    const lFixed = slot.lId ? byId.get(slot.lId) : null;
+    const rFixed = slot.rId ? byId.get(slot.rId) : null;
 
-    for (const pr of cands2) {
-      if (used.has(pr.aId) || used.has(pr.bId)) continue;
-      used.add(pr.aId); used.add(pr.bId);
-      chosen.push({ threshold: th, ...pr });
+    let cands = [];
+
+    if (lFixed && !rFixed) {
+      // Falta derecha
+      cands = orientedPairs
+        .filter(p => p.lId === lFixed.id && p.sum >= th && !used.has(p.rId))
+        .map(p => ({ l: lFixed, r: byId.get(p.rId), sum: p.sum }));
+    } else if (!lFixed && rFixed) {
+      // Falta izquierda
+      cands = orientedPairs
+        .filter(p => p.rId === rFixed.id && p.sum >= th && !used.has(p.lId))
+        .map(p => ({ l: byId.get(p.lId), r: rFixed, sum: p.sum }));
+    } else {
+      // Ambos vacíos
+      cands = orientedPairs
+        .filter(p => p.sum >= th && !used.has(p.lId) && !used.has(p.rId))
+        .map(p => ({ l: byId.get(p.lId), r: byId.get(p.rId), sum: p.sum }));
+    }
+
+    // Preferimos sumas mínimas para no "gastar" edades altas, y aleatorizamos un poco para variar.
+    cands.sort((a, b) => a.sum - b.sum);
+    cands = shuffleArray(cands);
+
+    for (const c of cands) {
+      if (!c.l || !c.r) continue;
+      if (used.has(c.l.id) || used.has(c.r.id)) continue;
+      used.add(c.l.id); used.add(c.r.id);
+      chosen[idx] = { threshold: th, l: c.l, r: c.r, sum: c.sum };
       if (rec(k + 1)) return true;
-      chosen.pop();
-      used.delete(pr.aId); used.delete(pr.bId);
+      chosen[idx] = null;
+      used.delete(c.l.id); used.delete(c.r.id);
     }
     return false;
   }
 
   const ok = rec(0);
   if (!ok) {
-    // Si no encontramos, puede ser porque no hay solución en general, o porque ya hemos excluido todas las existentes.
-    // Hacemos una comprobación rápida: ¿existe al menos una solución SIN excluir?
+    // ¿Existe alguna solución sin excluir?
     const okAny = (function existsAny() {
-      const used2 = new Set();
-      const chosen2 = [];
+      const used2 = new Set(fixedIds);
+      const chosen2 = Array(thresholds.length).fill(null);
+      for (let i = 0; i < thresholds.length; i++) {
+        const s = fixed[i];
+        if (s.lId && s.rId) {
+          chosen2[i] = { lId: s.lId, rId: s.rId, sum: (byId.get(s.lId)?.age || 0) + (byId.get(s.rId)?.age || 0), th: thresholds[i] };
+        }
+      }
       function rec2(k) {
-        if (k === thDesc.length) return true;
-        const th = thDesc[k];
-        const cands = candidates.get(th);
-        for (const pr of cands) {
-          if (used2.has(pr.aId) || used2.has(pr.bId)) continue;
-          used2.add(pr.aId); used2.add(pr.bId);
-          chosen2.push(pr);
+        if (k === order.length) return true;
+        const { th, idx } = order[k];
+        if (chosen2[idx]) return rec2(k + 1);
+
+        const slot = fixed[idx];
+        const lFixed2 = slot.lId ? byId.get(slot.lId) : null;
+        const rFixed2 = slot.rId ? byId.get(slot.rId) : null;
+
+        let cands2 = [];
+        if (lFixed2 && !rFixed2) {
+          cands2 = orientedPairs.filter(p => p.lId === lFixed2.id && p.sum >= th && !used2.has(p.rId));
+          for (const pr of cands2) {
+            used2.add(pr.rId);
+            chosen2[idx] = { lId: pr.lId, rId: pr.rId };
+            if (rec2(k + 1)) return true;
+            chosen2[idx] = null;
+            used2.delete(pr.rId);
+          }
+          return false;
+        }
+        if (!lFixed2 && rFixed2) {
+          cands2 = orientedPairs.filter(p => p.rId === rFixed2.id && p.sum >= th && !used2.has(p.lId));
+          for (const pr of cands2) {
+            used2.add(pr.lId);
+            chosen2[idx] = { lId: pr.lId, rId: pr.rId };
+            if (rec2(k + 1)) return true;
+            chosen2[idx] = null;
+            used2.delete(pr.lId);
+          }
+          return false;
+        }
+        cands2 = orientedPairs.filter(p => p.sum >= th && !used2.has(p.lId) && !used2.has(p.rId));
+        for (const pr of cands2) {
+          used2.add(pr.lId); used2.add(pr.rId);
+          chosen2[idx] = { lId: pr.lId, rId: pr.rId };
           if (rec2(k + 1)) return true;
-          chosen2.pop();
-          used2.delete(pr.aId); used2.delete(pr.bId);
+          chosen2[idx] = null;
+          used2.delete(pr.lId); used2.delete(pr.rId);
         }
         return false;
       }
       return rec2(0);
     })();
 
-    if (okAny) {
-      return { ok: false, pairs: [], noMore: true, reason: "No hay más combinaciones nuevas posibles con la selección actual." };
-    }
+    if (okAny) return { ok: false, pairs: [], noMore: true, reason: "No hay más combinaciones nuevas posibles con la selección actual." };
     return { ok: false, pairs: [], noMore: false, reason: "No hay una combinación válida con las edades/posiciones actuales." };
   }
 
-  // Convertimos al orden 75..95
-  const chosenMap = new Map(chosen.map(x => [x.threshold, x]));
-  const ordered = thresholds.map(th => chosenMap.get(th)).filter(Boolean).map(x => ({
-    threshold: x.threshold,
-    sum: x.sum,
-    a: byId.get(x.aId),
-    b: byId.get(x.bId),
-  }));
+  // Exportamos en el formato ya usado por la UI: {threshold,sum,a,b}
+  const ordered = thresholds.map((th, idx) => {
+    const p = chosen[idx];
+    return { threshold: th, sum: p.sum, a: p.l, b: p.r };
+  });
 
-  return { ok: true, pairs: ordered, sig: solutionSignatureFromPairs(chosen) };
+  const sig = signatureWithIndexes(ordered.map(p => ({ aId: p.a?.id, bId: p.b?.id })));
+  return { ok: true, pairs: ordered, sig };
 }
 
 function recalcVeteranas() {
+  ensureVetsState();
   const players = eligibleVetsPlayers();
 
-  // Reiniciamos estado de mensajes
-  if (!db.veteranasMeta) db.veteranasMeta = { noMore: false, lastMsg: "" };
+  // reset mensajes
   db.veteranasMeta.noMore = false;
   db.veteranasMeta.lastMsg = "";
 
   if (players.length < 10) {
     db.veteranasPairs = [];
-    db.veteranasSeen = db.veteranasSeen || [];
     save();
     return;
   }
 
-  db.veteranasSeen = Array.isArray(db.veteranasSeen) ? db.veteranasSeen : [];
-  const exclude = new Set(db.veteranasSeen);
-
-  // Evitar repetir también la solución actual (aunque no esté en seen)
+  // Exclude set: soluciones ya vistas + solución actual
+  const exclude = new Set(db.veteranasSeen || []);
   if (Array.isArray(db.veteranasPairs) && db.veteranasPairs.length) {
-    try {
-      const currentSig = solutionSignatureFromPairs(db.veteranasPairs.map(p => ({
-        aId: p.a?.id || p.aId,
-        bId: p.b?.id || p.bId
-      })));
-      if (currentSig) exclude.add(currentSig);
-    } catch (e) {}
+    const currentSig = signatureWithIndexes(db.veteranasPairs.map(p => ({ aId: p.a?.id, bId: p.b?.id })));
+    if (currentSig) exclude.add(currentSig);
   }
 
-  const res = solveVeteranas(players, VET_THRESHOLDS, exclude);
+  const mode = getVetsMode();
+  const fixed = (mode === "manual") ? db.veteranasManualSlots : null;
+
+  const res = solveVeteranasWithFixed(players, VET_THRESHOLDS, fixed, exclude);
 
   if (!res.ok) {
     if (res.noMore) {
       db.veteranasMeta.noMore = true;
       db.veteranasMeta.lastMsg = res.reason;
-      // mantenemos la solución actual si existe; si no, dejamos vacío
+      // mantenemos la solución actual si existe
     } else {
       db.veteranasPairs = [];
       db.veteranasMeta.lastMsg = res.reason;
@@ -2517,18 +2683,33 @@ function recalcVeteranas() {
 
   db.veteranasPairs = res.pairs;
   if (res.sig) db.veteranasSeen.push(res.sig);
-  save();
-}
 
+  // Si estamos en manual, además rellenamos los huecos en slots (solo los que estaban vacíos)
+  if (mode === "manual") {
+    // Aplicamos la solución a los slots, respetando lo que ya estaba elegido.
+   
 function renderVeteranas() {
-  // Safeguard if elements not present yet
+  ensureVetsState();
+
   const tbody = document.getElementById("vPlayersTbody");
   if (!tbody) return;
 
+  const mode = getVetsMode();
   const list = getVetsPlayers();
   const elig = eligibleVetsPlayers();
   document.getElementById("vEligibleCount").textContent = String(elig.length);
 
+  // --- Mode radios (no duplicar listeners) ---
+  const rAuto = document.getElementById("vModeAuto");
+  const rManual = document.getElementById("vModeManual");
+  if (rAuto && rManual) {
+    rAuto.checked = mode === "auto";
+    rManual.checked = mode === "manual";
+    rAuto.onchange = () => { if (rAuto.checked) setVetsMode("auto"); };
+    rManual.onchange = () => { if (rManual.checked) setVetsMode("manual"); };
+  }
+
+  // --- Tabla de jugadoras seleccionables ---
   tbody.innerHTML = list.map(p => {
     const hasAge = Number.isFinite(p.age) && p.age !== null;
     const age = (!hasAge) ? "—" : String(p.age);
@@ -2552,33 +2733,62 @@ function renderVeteranas() {
   // bind delete buttons
   tbody.querySelectorAll("[data-vdel]").forEach(btn => {
     btn.addEventListener("click", () => deleteVetsPlayer(btn.getAttribute("data-vdel")));
-  });// bind selection checkboxes
+  });
+
+  // bind selection checkboxes
   tbody.querySelectorAll("[data-vsel]").forEach(chk => {
     chk.addEventListener("change", () => {
       const id = chk.getAttribute("data-vsel");
       const listNow = getVetsPlayers();
       const p = listNow.find(x => x.id === id);
       if (!p) return;
+
       p.selected = chk.checked;
-      // Si cambia la selección, invalidamos parejas actuales y el historial de soluciones,
-      // porque el espacio de búsqueda ha cambiado.
+
+      // Si desmarcamos, y estaba en un hueco manual, lo liberamos.
+      if (!chk.checked) removeFromManualSlots(id);
+
+      // Cambió el espacio de búsqueda: invalidamos parejas y el historial
       db.veteranasPairs = [];
       db.veteranasSeen = [];
-      if (db.veteranasMeta) { db.veteranasMeta.noMore = false; db.veteranasMeta.lastMsg = ""; }
+      db.veteranasMeta.noMore = false;
+      db.veteranasMeta.lastMsg = "";
       save();
     });
   });
 
-  // Render pairs
+  // --- Render de parejas (auto o manual) ---
   const wrap = document.getElementById("vPairsWrap");
   const msg = document.getElementById("vPairsMsg");
   wrap.innerHTML = "";
 
-  const pairs = Array.isArray(db.veteranasPairs) ? db.veteranasPairs : [];
   if (elig.length < 10) {
-    msg.innerHTML = `Necesitas al menos <b>10 jugadoras con edad</b> para generar 5 parejas. Ahora mismo: <b>${elig.length}</b>.`;
+    msg.innerHTML = `Necesitas al menos <b>10 jugadoras con edad</b> (y marcadas como "Usar") para generar 5 parejas. Ahora mismo: <b>${elig.length}</b>.`;
+    // En modo manual, aun así mostramos los huecos para que el usuario vaya preparando.
+    if (mode === "manual") {
+      renderManualPairsUI(elig, wrap);
+      msg.innerHTML += `<div class="mt-2 text-xs text-slate-500">Cuando tengas 10, pulsa <b>Recalcular parejas</b> para rellenar huecos libres.</div>`;
+    }
     return;
   }
+
+  if (mode === "manual") {
+    msg.textContent = "";
+    renderManualPairsUI(elig, wrap);
+
+    // Mensajes de solver
+    if (db.veteranasMeta?.noMore) {
+      msg.innerHTML = `<b>No es posible generar más parejas nuevas</b> con la selección actual.<br/>${escapeHtml(db.veteranasMeta.lastMsg || "")}`;
+    } else if (db.veteranasMeta?.lastMsg) {
+      msg.innerHTML = `${escapeHtml(db.veteranasMeta.lastMsg)}`;
+    } else {
+      msg.innerHTML = `<span class="text-xs text-slate-500">Manual: puedes rellenar huecos a mano y pulsar <b>Recalcular parejas</b> para completar solo los huecos libres.</span>`;
+    }
+    return;
+  }
+
+  // --- Modo automático: cards como antes ---
+  const pairs = Array.isArray(db.veteranasPairs) ? db.veteranasPairs : [];
 
   if (!pairs.length) {
     if (db.veteranasMeta && db.veteranasMeta.noMore) {
@@ -2616,6 +2826,162 @@ function renderVeteranas() {
             <div class="text-slate-600">${sideLabel(a.side)} · ${a.age} años</div>
           </div>
           <div class="bg-white rounded-xl border p-3">
+            <div class="font-medium">${escapeHtml(b.name)}</div>
+            <div class="text-slate-600">${sideLabel(b.side)} · ${b.age} años</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderManualPairsUI(eligiblePlayers, wrap) {
+  // UI manual: 5 tarjetas con desplegables por lado, filtrando disponibles y factibles por umbral.
+  ensureVetsState();
+  const byId = new Map(eligiblePlayers.map(p => [p.id, p]));
+
+  const slots = db.veteranasManualSlots;
+
+  // ids usados en otros slots
+  function usedIds(exceptPairIdx, exceptSide) {
+    const used = new Set();
+    for (let i = 0; i < slots.length; i++) {
+      const s = slots[i];
+      if (i === exceptPairIdx) {
+        if (exceptSide !== "L" && s.lId) used.add(s.lId);
+        if (exceptSide !== "R" && s.rId) used.add(s.rId);
+      } else {
+        if (s.lId) used.add(s.lId);
+        if (s.rId) used.add(s.rId);
+      }
+    }
+    return used;
+  }
+
+  function canCompleteWithCandidate(pairIdx, side, candId) {
+    const th = VET_THRESHOLDS[pairIdx];
+    const s = slots[pairIdx];
+    const cand = byId.get(candId);
+    if (!cand) return false;
+
+    const otherId = (side === "L") ? s.rId : s.lId;
+    if (otherId) {
+      const other = byId.get(otherId);
+      if (!other) return false;
+      const a = side === "L" ? cand : other;
+      const b = side === "L" ? other : cand;
+      if (!isValidPair(a, b)) return false;
+      const sum = (a.age || 0) + (b.age || 0);
+      return sum >= th;
+    }
+
+    // si el otro lado está vacío, comprobamos si existe al menos un "other" posible que complete el umbral
+    const used = usedIds(pairIdx, side);
+    used.add(candId);
+
+    const others = eligiblePlayers.filter(p => !used.has(p.id));
+    const otherCandidates = (side === "L")
+      ? others.filter(p => isAllowedRight(p))
+      : others.filter(p => isAllowedLeft(p));
+
+    for (const o of otherCandidates) {
+      const a = side === "L" ? cand : o;
+      const b = side === "L" ? o : cand;
+      if (!isValidPair(a, b)) continue;
+      const sum = (a.age || 0) + (b.age || 0);
+      if (sum >= th) return true;
+    }
+    return false;
+  }
+
+  function buildOptions(pairIdx, side) {
+    const used = usedIds(pairIdx, side);
+    const base = eligiblePlayers.filter(p => !used.has(p.id));
+    const filtered = side === "L" ? base.filter(isAllowedLeft) : base.filter(isAllowedRight);
+    // “pueden cumplir condición de edad” (ahora o potencialmente)
+    const feasible = filtered.filter(p => canCompleteWithCandidate(pairIdx, side, p.id));
+    // Orden: mayores primero para que sea más fácil alcanzar umbrales altos, pero sin obligar
+    feasible.sort((a, b) => (b.age || 0) - (a.age || 0));
+    return feasible;
+  }
+
+  function slotCard(pairIdx) {
+    const th = VET_THRESHOLDS[pairIdx];
+    const s = slots[pairIdx];
+    const left = s.lId ? byId.get(s.lId) : null;
+    const right = s.rId ? byId.get(s.rId) : null;
+    const sum = (left?.age || 0) + (right?.age || 0);
+    const complete = !!left && !!right;
+    const ok = complete && sum >= th && isValidPair(left, right);
+
+    const leftOpts = buildOptions(pairIdx, "L");
+    const rightOpts = buildOptions(pairIdx, "R");
+
+    const okBadge = complete
+      ? (ok
+        ? '<span class="text-xs px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">OK</span>'
+        : '<span class="text-xs px-2 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200">No cumple</span>')
+      : '<span class="text-xs px-2 py-1 rounded-full bg-slate-50 text-slate-700 border border-slate-200">Incompleta</span>';
+
+    const sumText = complete ? `<div class="text-sm text-slate-700"><b>${sum}</b> años</div>` : `<div class="text-sm text-slate-500">—</div>`;
+
+    const leftSel = `
+      <label class="text-xs text-slate-600">Izquierda / Comodín</label>
+      <select class="mt-1 w-full border rounded-xl px-3 py-2" data-vm-pair="${pairIdx}" data-vm-side="L">
+        <option value="">— Libre —</option>
+        ${leftOpts.map(p => `<option value="${p.id}" ${p.id === s.lId ? "selected" : ""}>${escapeHtml(p.name)} · ${sideLabel(p.side)} · ${p.age}</option>`).join("")}
+      </select>`;
+
+    const rightSel = `
+      <label class="text-xs text-slate-600">Derecha / Comodín</label>
+      <select class="mt-1 w-full border rounded-xl px-3 py-2" data-vm-pair="${pairIdx}" data-vm-side="R">
+        <option value="">— Libre —</option>
+        ${rightOpts.map(p => `<option value="${p.id}" ${p.id === s.rId ? "selected" : ""}>${escapeHtml(p.name)} · ${sideLabel(p.side)} · ${p.age}</option>`).join("")}
+      </select>`;
+
+    return `
+      <div class="border rounded-2xl p-4 bg-slate-50">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="font-semibold">Pareja ${pairIdx + 1} <span class="text-slate-600 font-normal">(≥ ${th} años)</span></div>
+          <div class="flex items-center gap-2">
+            ${sumText}
+            ${okBadge}
+          </div>
+        </div>
+        <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>${leftSel}</div>
+          <div>${rightSel}</div>
+        </div>
+        <div class="mt-2 text-xs text-slate-500">
+          Solo se muestran jugadoras disponibles (no usadas en otras parejas) y que pueden cumplir el umbral de edad.
+        </div>
+      </div>`;
+  }
+
+  wrap.innerHTML = VET_THRESHOLDS.map((_, idx) => slotCard(idx)).join("");
+
+  // Bind selects
+  wrap.querySelectorAll("select[data-vm-pair]").forEach(sel => {
+    sel.addEventListener("change", () => {
+      const pairIdx = Number(sel.getAttribute("data-vm-pair"));
+      const side = sel.getAttribute("data-vm-side"); // "L" | "R"
+      const val = sel.value || null;
+
+      ensureVetsState();
+      const slot = db.veteranasManualSlots[pairIdx];
+      if (side === "L") slot.lId = val;
+      else slot.rId = val;
+
+      // Al cambiar huecos manuales, invalidamos parejas actuales y el historial de soluciones
+      db.veteranasPairs = [];
+      db.veteranasSeen = [];
+      db.veteranasMeta.noMore = false;
+      db.veteranasMeta.lastMsg = "";
+      save();
+    });
+  });
+}
+border p-3">
             <div class="font-medium">${escapeHtml(b.name)}</div>
             <div class="text-slate-600">${sideLabel(b.side)} · ${b.age} años</div>
           </div>
