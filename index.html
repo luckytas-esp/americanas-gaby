@@ -11,11 +11,14 @@
     .tab-active { background: #0f172a; color: white; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
   
-    .btn-primary{padding:.5rem 1rem;border-radius:.75rem;background:#0f172a;color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08);}
-    .btn-primary:hover{background:#0b1220;}
+    .btn-primary{padding:.5rem 1rem;border-radius:.75rem;background:#2563eb;color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08);}
+    .btn-primary:hover{background:#1d4ed8;}
     .btn-secondary{padding:.5rem 1rem;border-radius:.75rem;background:#fff;border:1px solid #e2e8f0;box-shadow:0 1px 2px rgba(0,0,0,.04);}
     .btn-secondary:hover{background:#f8fafc;}
-    .btn-danger{padding:.5rem 1rem;border-radius:.75rem;background:#e11d48;color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08);}
+    
+    .btn-success{padding:.5rem 1rem;border-radius:.75rem;background:#16a34a;color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08);}
+    .btn-success:hover{background:#15803d;}
+.btn-danger{padding:.5rem 1rem;border-radius:.75rem;background:#e11d48;color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08);}
     .btn-danger:hover{background:#be123c;}
     .btn-success{padding:.5rem 1rem;border-radius:.75rem;background:#059669;color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08);}
     .btn-success:hover{background:#047857;}
@@ -29,8 +32,8 @@
 <div class="max-w-6xl mx-auto p-4 sm:p-6">
 <header class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
 <div>
-<h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight flex items-center gap-2"><img src="assets/icons/icon-192.png" alt="Americanas Gaby" class="w-7 h-7 rounded-md"/>Americanas Gaby</h1>
-<p class="text-slate-600">Pistas simultáneas · parejas IZQ–DER · sin repetir parejas · ranking final</p>
+<h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight flex items-center gap-2"><img src="assets/icons/icon-192.png" alt="Americanas Gaby" class="w-7 h-7 rounded-md"/><span id="appTitleText">Americanas Gaby</span></h1>
+<p class="text-slate-600" id="appSubtitleText">Pistas simultáneas · parejas IZQ–DER · sin repetir parejas · ranking final</p>
 </div>
 <div class="flex gap-2"><button class="px-3 py-2 rounded-xl bg-sky-500 text-white shadow-sm hover:bg-sky-600 text-sm hidden" id="btnInstall">Instalar</button>
 <button class="px-3 py-2 rounded-xl bg-white border shadow-sm hover:bg-slate-50 text-sm" id="btnImport">Importar (JSON)</button><button class="px-3 py-2 rounded-xl bg-white border shadow-sm hover:bg-slate-50 text-sm" id="btnExport">
@@ -330,6 +333,12 @@ Cris,C" rows="4"></textarea>
       </div>
     </div>
 
+    <div class="mt-4 flex flex-wrap gap-2">
+      <button class="btn-secondary px-3 py-2 rounded-xl text-sm font-medium stats-tab tab-active" data-stats="americanas">Americanas</button>
+      <button class="btn-secondary px-3 py-2 rounded-xl text-sm font-medium stats-tab" data-stats="veteranas">Veteranas</button>
+    </div>
+
+    <div id="stats-americanas" class="mt-4">
     <div class="mt-4 overflow-auto border rounded-2xl">
       <table class="min-w-full text-sm">
         <thead class="bg-slate-100 text-slate-700">
@@ -365,6 +374,49 @@ Cris,C" rows="4"></textarea>
         </div>
       </div>
     </div>
+    </div>
+
+    <div id="stats-veteranas" class="mt-4 hidden">
+      <div class="card-muted">
+        <div class="flex items-center justify-between gap-2">
+          <div class="font-semibold">Resumen Veteranas</div>
+          <div class="text-xs text-slate-600">Umbrales: 75/80/85/90/95</div>
+        </div>
+        <div class="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+          <div><div class="text-xs text-slate-600">Jugadoras con edad</div><div class="text-lg font-bold" id="vStatEligible">--</div></div>
+          <div><div class="text-xs text-slate-600">Seleccionadas</div><div class="text-lg font-bold" id="vStatSelected">--</div></div>
+          <div><div class="text-xs text-slate-600">Media edad</div><div class="text-lg font-bold" id="vStatAvgAge">--</div></div>
+          <div><div class="text-xs text-slate-600">Parejas generadas</div><div class="text-lg font-bold" id="vStatPairs">--</div></div>
+        </div>
+      </div>
+
+      <div class="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="card-muted">
+          <div class="font-semibold">Jugadoras seleccionadas</div>
+          <div class="text-xs text-slate-600 mt-1">Solo cuentan las que tienen edad y están marcadas en “Usar”.</div>
+          <div class="mt-3 overflow-auto border rounded-2xl bg-white">
+            <table class="min-w-full text-sm">
+              <thead class="bg-slate-100 text-slate-700">
+                <tr>
+                  <th class="text-left p-3">Nombre</th>
+                  <th class="text-left p-3">Posición</th>
+                  <th class="text-left p-3">Edad</th>
+                </tr>
+              </thead>
+              <tbody id="vStatsPlayersTbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card-muted">
+          <div class="font-semibold">Parejas actuales</div>
+          <div class="text-xs text-slate-600 mt-1">Suma de edades y validación por umbral.</div>
+          <div class="mt-3 space-y-3" id="vStatsPairsWrap"></div>
+          <div class="mt-2 text-sm text-slate-600" id="vStatsMsg"></div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </section>
 
@@ -417,7 +469,7 @@ Cris,C" rows="4"></textarea>
 <section class="tab-panel mt-6 hidden" id="tab-veteranas">
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
     <div class="bg-white border rounded-2xl shadow-sm p-4">
-      <h2 class="text-lg font-semibold">Competición Veteranas</h2>
+      <h2 class="text-lg font-semibold">Cálculo de parejas de Veteranas</h2>
       <p class="text-sm text-slate-600 mt-1">
         Genera 5 parejas cumpliendo suma de edades y posiciones (Izquierda/Derecha; Comodín vale para ambas).
       </p>
@@ -443,8 +495,8 @@ Cris,C" rows="4"></textarea>
         </div>
 
         <div class="flex flex-wrap gap-2">
-          <button id="btnAddVets" class="btn-primary px-4 py-2 rounded-xl font-medium">Añadir jugadora</button>
-          <button id="btnRecalcVets" class="btn-secondary px-4 py-2 rounded-xl font-medium">Recalcular parejas</button>
+          <button id="btnAddVets" class="btn-success px-4 py-2 rounded-xl font-medium">Añadir jugadora</button>
+          <button id="btnRecalcVets" class="btn-primary px-4 py-2 rounded-xl font-medium">Recalcular parejas</button>
           <button id="btnClearVets" class="btn-danger px-4 py-2 rounded-xl font-medium">Borrar lista</button>
         </div>
 
@@ -460,7 +512,19 @@ Cris,C" rows="4"></textarea>
         <span class="text-sm text-slate-600">Elegibles (con edad): <b id="vEligibleCount">0</b></span>
       </div>
 
-      <div class="mt-3 overflow-x-auto">
+      <div class="mt-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h3 class="text-lg font-semibold">Parejas generadas</h3>
+          <span class="text-sm text-slate-600">Reglas: 5 partidos, umbrales 75/80/85/90/95</span>
+        </div>
+
+        <div class="mt-3 space-y-3" id="vPairsWrap"></div>
+
+        <div class="mt-3 text-sm text-slate-600" id="vPairsMsg"></div>
+      </div>
+    <div class="mt-6 border-t pt-4">
+        <h3 class="text-lg font-semibold">Jugadoras seleccionadas</h3>
+        <div class="mt-3 overflow-x-auto">
         <table class="min-w-full text-sm">
           <thead>
             <tr class="text-left text-slate-600 border-b">
@@ -474,18 +538,9 @@ Cris,C" rows="4"></textarea>
           <tbody id="vPlayersTbody"></tbody>
         </table>
       </div>
-
-      <div class="mt-6 border-t pt-4">
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <h3 class="text-lg font-semibold">Parejas generadas</h3>
-          <span class="text-sm text-slate-600">Reglas: 5 partidos, umbrales 75/80/85/90/95</span>
-        </div>
-
-        <div class="mt-3 space-y-3" id="vPairsWrap"></div>
-
-        <div class="mt-3 text-sm text-slate-600" id="vPairsMsg"></div>
       </div>
-    </div>
+
+      </div>
   </div>
 </section>
 0 text-xs text-slate-500">
@@ -703,6 +758,7 @@ Cris,C" rows="4"></textarea>
 
     function renderStatsTab() {
       const { statRows, topPairs, roundsPlayed, matchesTotal, gamesTotal, pointsTotal } = computeStats();
+      typeof setStatsSub === "function" && setStatsSub(currentStatsSub || "americanas");
 
       const tbody = $("#statsTable");
       if (tbody) {
@@ -746,6 +802,63 @@ Cris,C" rows="4"></textarea>
       $("#statMatchesTotal") && ($("#statMatchesTotal").textContent = String(matchesTotal));
       $("#statGamesTotal") && ($("#statGamesTotal").textContent = String(gamesTotal));
       $("#statPointsTotal") && ($("#statPointsTotal").textContent = String(pointsTotal));
+
+      // ---- Estadísticas Veteranas (sin resultados: resumen de selección y parejas actuales) ----
+      const vAll = (db.veteranasPlayers || []);
+      const vEligible = vAll.filter(p => Number.isFinite(p.age) && p.age > 0);
+      const vSelected = vEligible.filter(p => p.use !== false); // por defecto true
+      const avgAge = vSelected.length ? Math.round(vSelected.reduce((a,p)=>a+p.age,0) / vSelected.length) : 0;
+
+      $("#vStatEligible") && ($("#vStatEligible").textContent = String(vEligible.length));
+      $("#vStatSelected") && ($("#vStatSelected").textContent = String(vSelected.length));
+      $("#vStatAvgAge") && ($("#vStatAvgAge").textContent = vSelected.length ? String(avgAge) : "--");
+      $("#vStatPairs") && ($("#vStatPairs").textContent = db.veteranasPairs?.length ? String(db.veteranasPairs.length) : "0");
+
+      const vTbody = $("#vStatsPlayersTbody");
+      if (vTbody) {
+        const rows = vSelected.sort((a,b)=>b.age-a.age).map(p => `
+          <tr class="border-t">
+            <td class="p-3 font-medium">${escapeHtml(p.name)}</td>
+            <td class="p-3">${roleLabel(p.side)}</td>
+            <td class="p-3">${p.age}</td>
+          </tr>
+        `).join("");
+        vTbody.innerHTML = rows || `<tr class="border-t"><td class="p-3 text-slate-500" colspan="3">No hay jugadoras seleccionadas con edad.</td></tr>`;
+      }
+
+      const vPairsEl = $("#vStatsPairsWrap");
+      const vMsgEl = $("#vStatsMsg");
+      if (vPairsEl) {
+        const thresholds = [75,80,85,90,95];
+        const pairs = db.veteranasPairs || [];
+        if (!pairs.length) {
+          vPairsEl.innerHTML = `<div class="text-slate-500 text-sm">Aún no hay parejas generadas.</div>`;
+          vMsgEl && (vMsgEl.textContent = "");
+        } else {
+          vPairsEl.innerHTML = pairs.map((pair, idx) => {
+            const t = thresholds[idx] ?? 0;
+            const sum = (pair.a?.age||0) + (pair.b?.age||0);
+            const ok = sum >= t;
+            return `<div class="border rounded-2xl bg-white p-3">
+              <div class="flex items-center justify-between gap-2">
+                <div class="font-semibold">Pareja ${idx+1} (≥ ${t} años)</div>
+                <div class="text-sm">${sum} años <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs ${ok ? "bg-green-100 text-green-700" : "bg-rose-100 text-rose-700"}">${ok ? "OK" : "NO"}</span></div>
+              </div>
+              <div class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                <div class="border rounded-xl p-2">
+                  <div class="font-medium">${escapeHtml(pair.a?.name||"¿?")}</div>
+                  <div class="text-xs text-slate-600">${roleLabel(pair.a?.side)} · ${pair.a?.age||"?"} años</div>
+                </div>
+                <div class="border rounded-xl p-2">
+                  <div class="font-medium">${escapeHtml(pair.b?.name||"¿?")}</div>
+                  <div class="text-xs text-slate-600">${roleLabel(pair.b?.side)} · ${pair.b?.age||"?"} años</div>
+                </div>
+              </div>
+            </div>`;
+          }).join("");
+          vMsgEl && (vMsgEl.textContent = db.veteranasMeta?.lastMsg || "");
+        }
+      }
     }
 
 function uid(prefix="id") { return prefix + "_" + Math.random().toString(16).slice(2) + "_" + Date.now().toString(16); }
@@ -833,10 +946,39 @@ function uid(prefix="id") { return prefix + "_" + Math.random().toString(16).sli
       const btn = document.querySelector(`.tab[data-tab="${name}"]`);
       if (btn) btn.classList.add("tab-active");
 
+      // Título dinámico: en Veteranas mostramos un encabezado específico
+      const titleEl = $("#appTitleText");
+      const subEl = $("#appSubtitleText");
+      if (titleEl) {
+        if (name === "veteranas") {
+          titleEl.textContent = "Cálculo de parejas de Veteranas";
+          subEl && (subEl.textContent = "Generador de 5 parejas por umbrales de edad y posiciones (IZQ/DER; comodín vale para ambas).");
+        } else {
+          titleEl.textContent = "Americanas Gaby";
+          subEl && (subEl.textContent = "Pistas simultáneas · parejas IZQ–DER · sin repetir parejas · ranking final");
+        }
+      }
+
       // Render bajo demanda para evitar cálculos innecesarios
       if (name === "ranking") renderRanking();
       if (name === "stats") renderStatsTab();
       if (name === "veteranas") renderVeteranas();
+    }
+
+
+    // Subpestañas de Estadísticas: Americanas / Veteranas
+    let currentStatsSub = "americanas";
+    function setStatsSub(name) {
+      currentStatsSub = name;
+      const a = $("#stats-americanas");
+      const v = $("#stats-veteranas");
+      if (a && v) {
+        a.classList.toggle("hidden", name !== "americanas");
+        v.classList.toggle("hidden", name !== "veteranas");
+      }
+      $$(".stats-tab").forEach(b => {
+        b.classList.toggle("tab-active", b.dataset.stats === name);
+      });
     }
 
     function renderAll() {
@@ -1957,6 +2099,7 @@ function onTimerFinished() {
 
     function bindEvents() {
       $$(".tab").forEach(btn => btn.addEventListener("click", () => setTab(btn.dataset.tab)));
+      $$(".stats-tab").forEach(btn => btn.addEventListener("click", () => { setStatsSub(btn.dataset.stats); if (btn.dataset.stats === "veteranas") renderStatsTab(); }));
 
       // Sugerencia automática de rondas
       $("#btnApplySuggestedRounds")?.addEventListener("click", applySuggestedRounds);
