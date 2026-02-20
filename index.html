@@ -10,7 +10,20 @@
 <style>
     .tab-active { background: #0f172a; color: white; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
-  </style>
+  
+    .btn-primary{padding:.5rem 1rem;border-radius:.75rem;background:#0f172a;color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08);}
+    .btn-primary:hover{background:#0b1220;}
+    .btn-secondary{padding:.5rem 1rem;border-radius:.75rem;background:#fff;border:1px solid #e2e8f0;box-shadow:0 1px 2px rgba(0,0,0,.04);}
+    .btn-secondary:hover{background:#f8fafc;}
+    .btn-danger{padding:.5rem 1rem;border-radius:.75rem;background:#e11d48;color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08);}
+    .btn-danger:hover{background:#be123c;}
+    .btn-success{padding:.5rem 1rem;border-radius:.75rem;background:#059669;color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08);}
+    .btn-success:hover{background:#047857;}
+    .card{border:1px solid #e2e8f0;border-radius:1rem;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.04);padding:1rem;}
+    .card-muted{border:1px solid #e2e8f0;border-radius:1rem;background:#f8fafc;padding:1rem;}
+    .sticky-bar{position:sticky;top:0;z-index:30;background:rgba(248,250,252,.95);backdrop-filter:blur(6px);border-bottom:1px solid #e2e8f0;}
+
+</style>
 <link href="manifest.json" rel="manifest"/><meta content="#38bdf8" name="theme-color"/><meta content="yes" name="apple-mobile-web-app-capable"/><meta content="Americanas Gaby" name="apple-mobile-web-app-title"/><link href="assets/icons/apple-touch-icon.png" rel="apple-touch-icon"/></head>
 <body class="bg-slate-50 text-slate-900">
 <div class="max-w-6xl mx-auto p-4 sm:p-6">
@@ -26,7 +39,7 @@
 <button class="px-3 py-2 rounded-xl bg-white border shadow-sm hover:bg-slate-50 text-sm" id="btnExportCSV">
           Exportar (Excel/CSV)
         </button>
-<button class="px-3 py-2 rounded-xl bg-rose-600 text-white shadow-sm hover:bg-rose-700 text-sm" id="btnReset">
+<button class="btn-danger" id="btnReset">
           Reset (borrar todo)
         </button>
 <input accept="application/json,.json" class="hidden" id="fileImport" type="file"/></div>
@@ -37,7 +50,8 @@
 <button class="tab px-3 py-2 rounded-xl text-sm font-medium hover:bg-slate-100" data-tab="plan">2) Jornada</button>
 <button class="tab px-3 py-2 rounded-xl text-sm font-medium hover:bg-slate-100" data-tab="match">3) Partido</button>
 <button class="tab px-3 py-2 rounded-xl text-sm font-medium hover:bg-slate-100" data-tab="ranking">4) Ranking</button>
-<button class="tab px-3 py-2 rounded-xl text-sm font-medium hover:bg-slate-100" data-tab="history">5) Historial</button>
+<button class="tab px-3 py-2 rounded-xl text-sm font-medium hover:bg-slate-100" data-tab="stats">5) Estadísticas</button>
+<button class="tab px-3 py-2 rounded-xl text-sm font-medium hover:bg-slate-100" data-tab="history">6) Historial</button>
 </div>
 </nav>
 <!-- TAB 1: Jugadoras -->
@@ -51,11 +65,11 @@
 <div class="mt-4 space-y-3">
 <div>
 <label class="block text-sm font-medium">Nombre</label>
-<input class="w-full rounded-xl border px-3 py-2" id="playerName" placeholder="Ej: Laura"/>
+<input class="w-full rounded-xl border px-3 py-3" id="playerName" placeholder="Ej: Laura"/>
 </div>
 <div>
 <label class="block text-sm font-medium">Rol</label>
-<select class="w-full rounded-xl border px-3 py-2" id="playerRole">
+<select class="w-full rounded-xl border px-3 py-3" id="playerRole">
 <option value="L">IZQUIERDA</option>
 <option value="R">DERECHA</option>
 <option value="C">COMODÍN</option>
@@ -69,7 +83,7 @@
 <p class="text-sm text-slate-600 mt-2">
                 Una jugadora por línea: <span class="mono">Nombre,Rol</span> (Rol: L/R/C)
               </p>
-<textarea class="w-full mt-2 rounded-xl border px-3 py-2 mono text-sm" id="bulkImport" placeholder="Ana,L
+<textarea class="w-full mt-2 rounded-xl border px-3 py-3 mono text-sm" id="bulkImport" placeholder="Ana,L
 Bea,R
 Cris,C" rows="4"></textarea>
 <div class="flex gap-2 mt-2">
@@ -124,23 +138,30 @@ Cris,C" rows="4"></textarea>
 <div class="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
 <div>
 <label class="block text-sm font-medium">Pistas disponibles</label>
-<input class="w-full rounded-xl border px-3 py-2" id="courtCount" min="1" placeholder="Ej: 2" step="1" type="number"/>
+<input class="w-full rounded-xl border px-3 py-3" id="courtCount" min="1" placeholder="Ej: 2" step="1" type="number"/>
 <p class="text-xs text-slate-500 mt-1">Cada pista usa 4 jugadoras por ronda.</p>
 </div>
 <div>
 <label class="block text-sm font-medium">Jugadoras a incluir</label>
-<input class="w-full rounded-xl border px-3 py-2" id="includeCount" min="4" placeholder="Ej: 8" step="1" type="number"/>
+<input class="w-full rounded-xl border px-3 py-3" id="includeCount" min="4" placeholder="Ej: 8" step="1" type="number" inputmode="numeric" pattern="[0-9]*">
 <p class="text-xs text-slate-500 mt-1" id="needPlayersHint">Mínimo: --</p>
 </div>
 <div>
 <label class="block text-sm font-medium">Rondas (nº de turnos)</label>
-<input class="w-full rounded-xl border px-3 py-2" id="matchCount" min="1" placeholder="Ej: 6" step="1" type="number"/>
+<input class="w-full rounded-xl border px-3 py-3" id="matchCount" min="1" placeholder="Ej: 6" step="1" type="number" inputmode="numeric" pattern="[0-9]*">
 <p class="text-xs text-slate-500 mt-1">Cada ronda genera <b>pistas</b> partidos simultáneos.</p>
+
+<p class="text-xs text-slate-500 mt-2">
+  <span class="font-semibold">Sugerencia:</span>
+  <span id="suggestedRoundsLabel">--</span>
+  <button type="button" id="btnApplySuggestedRounds" class="ml-2 underline text-slate-700 hover:text-slate-900">Aplicar</button>
+</p>
+<p class="text-xs text-slate-500 mt-1" id="suggestedRoundsExplain">--</p>
 
 </div>
 <div>
 <label class="block text-sm font-medium">Duración total de la jornada (min)</label>
-<input class="w-full rounded-xl border px-3 py-2" id="totalDurationMin" min="10" step="5" type="number" value="90"/>
+<input class="w-full rounded-xl border px-3 py-3" id="totalDurationMin" min="10" step="5" type="number" value="90" inputmode="numeric" pattern="[0-9]*">
 <p class="text-xs text-slate-500 mt-1">Se reparte entre las rondas.</p>
 </div>
 <div class="rounded-2xl border bg-slate-50 p-3">
@@ -187,14 +208,14 @@ Cris,C" rows="4"></textarea>
 <h2 class="text-lg font-semibold">Ronda en curso</h2>
 <p class="text-sm text-slate-600 mt-1">Esta ronda puede tener varias pistas (partidos simultáneos).</p>
 </div>
-<div class="rounded-2xl border bg-slate-50 p-3">
+<div class="card-muted sticky-bar px-4 py-4 mt-2">
 <div class="text-xs text-slate-600">Temporizador</div>
 <div class="text-3xl font-bold mono" id="timerLabel">00:00</div>
 <div class="flex gap-2 mt-2">
-<button class="px-3 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 text-sm" id="btnStart">Iniciar</button>
-<button class="px-3 py-2 rounded-xl bg-white border hover:bg-slate-50 text-sm" id="btnPause">Pausar</button>
-<button class="px-3 py-2 rounded-xl bg-white border hover:bg-slate-50 text-sm" id="btnResetTimer">Reiniciar</button>
-<button class="px-3 py-2 rounded-xl bg-rose-600 text-white hover:bg-rose-700 text-sm" id="btnFinishRound">Finalizar ronda</button>
+<button class="btn-success text-sm" id="btnStart">Iniciar</button>
+<button class="btn-secondary text-sm" id="btnPause">Pausar</button>
+<button class="btn-secondary text-sm" id="btnResetTimer">Reiniciar</button>
+<button class="btn-danger text-sm" id="btnFinishRound">Finalizar ronda</button>
 </div>
 </div>
 </div>
@@ -207,23 +228,40 @@ Cris,C" rows="4"></textarea>
 <div class="mt-3 grid grid-cols-1 gap-3" id="currentMatchPairs"></div>
 </div>
 <div class="mt-4 rounded-2xl border bg-white p-4">
-<h3 class="font-semibold">Resultados (al finalizar el tiempo)</h3>
+<h3 class="font-semibold">Resultados</h3>
+<div class="mt-3 flex flex-wrap items-center gap-3">
+  <div class="text-sm font-medium text-slate-700">Tipo de marcador:</div>
+  <label class="flex items-center gap-2 text-sm">
+    <input type="radio" name="scoreMode" value="games" id="scoreModeGames" checked>
+    Juegos
+  </label>
+  <label class="flex items-center gap-2 text-sm">
+    <input type="radio" name="scoreMode" value="points" id="scoreModePoints">
+    Puntos
+  </label>
+  <label class="flex items-center gap-2 text-sm">
+    <input type="radio" name="scoreMode" value="both" id="scoreModeBoth">
+    Juegos + Puntos
+  </label>
+  <div class="text-xs text-slate-500">El ranking prioriza: <b>Partidos</b> → <b>Juegos</b> → <b>Puntos</b>.</div>
+</div>
+
 <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
 <div>
 <label class="block text-sm font-medium">Fecha</label>
-<input class="w-full rounded-xl border px-3 py-2" id="resultDate" type="date"/>
+<input class="w-full rounded-xl border px-3 py-3" id="resultDate" type="date"/>
 </div>
 <div>
 <label class="block text-sm font-medium">Comentario (opcional)</label>
-<input class="w-full rounded-xl border px-3 py-2" id="resultComment"/>
+<input class="w-full rounded-xl border px-3 py-3" id="resultComment"/>
 </div>
 </div>
 <div class="mt-4" id="resultsGrid"></div>
 <div class="mt-4 flex flex-col sm:flex-row gap-2">
-<button class="px-4 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm disabled:opacity-50" disabled="" id="btnSaveResult">
+<button class="btn-primary" disabled="" id="btnSaveResult">
                 Guardar resultado de la ronda
               </button>
-<button class="px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800 shadow-sm disabled:opacity-50" disabled="" id="btnNextMatch">
+<button class="btn-secondary" disabled="" id="btnNextMatch">
                 Siguiente ronda (mostrar + iniciar)
               </button>
 </div>
@@ -259,6 +297,7 @@ Cris,C" rows="4"></textarea>
 </div>
 <button class="px-4 py-2 rounded-xl bg-white border hover:bg-slate-50 shadow-sm" id="btnRecalcRanking">Refrescar</button>
 </div>
+<p class="text-xs text-slate-500 mt-2" id="rankingNote"></p>
 <div class="mt-4 overflow-auto border rounded-2xl">
 <table class="min-w-full text-sm">
 <thead class="bg-slate-100 text-slate-700">
@@ -266,8 +305,10 @@ Cris,C" rows="4"></textarea>
 <th class="text-left p-3">#</th>
 <th class="text-left p-3">Jugadora</th>
 <th class="text-left p-3">Rol</th>
-<th class="text-left p-3">Puntos</th>
-<th class="text-left p-3">Partidos jugados</th>
+<th class="text-left p-3">Partidos (G-P)</th>
+<th class="text-left p-3">Juegos (GF-GC)</th>
+<th class="text-left p-3">Puntos (PF-PC)</th>
+<th class="text-left p-3">PJG</th>
 </tr>
 </thead>
 <tbody id="rankingTable"></tbody>
@@ -275,7 +316,57 @@ Cris,C" rows="4"></textarea>
 </div>
 </div>
 </section>
-<!-- TAB 5: Historial -->
+<!-- TAB 5: Estadísticas -->
+<section class="tab-panel mt-6 hidden" id="tab-stats">
+  <div class="card">
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <h2 class="text-xl font-bold">Estadísticas</h2>
+        <p class="text-sm text-slate-600 mt-1">Se calculan con los resultados guardados en cada ronda.</p>
+      </div>
+      <div class="text-right text-xs text-slate-500">
+        <div><span class="font-semibold">Modo ranking:</span> Partidos → Juegos → Puntos</div>
+      </div>
+    </div>
+
+    <div class="mt-4 overflow-auto border rounded-2xl">
+      <table class="min-w-full text-sm">
+        <thead class="bg-slate-100 text-slate-700">
+          <tr>
+            <th class="text-left p-3">#</th>
+            <th class="text-left p-3">Jugadora</th>
+            <th class="text-left p-3">Rol</th>
+            <th class="text-left p-3">PJG</th>
+            <th class="text-left p-3">G</th>
+            <th class="text-left p-3">P</th>
+            <th class="text-left p-3">Juegos (GF-GC)</th>
+            <th class="text-left p-3">Puntos (PF-PC)</th>
+            <th class="text-left p-3">%G</th>
+          </tr>
+        </thead>
+        <tbody id="statsTable"></tbody>
+      </table>
+    </div>
+
+    <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="card-muted">
+        <div class="font-semibold">Top parejas</div>
+        <div class="text-xs text-slate-600 mt-1">Por victorias (desempate por diferencial de juegos y puntos).</div>
+        <div class="mt-3 text-sm" id="topPairsList">--</div>
+      </div>
+      <div class="card-muted">
+        <div class="font-semibold">Resumen</div>
+        <div class="mt-3 grid grid-cols-2 gap-3 text-sm">
+          <div><div class="text-xs text-slate-600">Rondas jugadas</div><div class="text-lg font-bold" id="statRoundsPlayed2">--</div></div>
+          <div><div class="text-xs text-slate-600">Partidos totales</div><div class="text-lg font-bold" id="statMatchesTotal">--</div></div>
+          <div><div class="text-xs text-slate-600">Juegos totales</div><div class="text-lg font-bold" id="statGamesTotal">--</div></div>
+          <div><div class="text-xs text-slate-600">Puntos totales</div><div class="text-lg font-bold" id="statPointsTotal">--</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section class="tab-panel mt-6 hidden" id="tab-history">
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
 <div class="bg-white border rounded-2xl shadow-sm p-4">
@@ -348,7 +439,240 @@ Cris,C" rows="4"></textarea>
     const $ = (sel) => document.querySelector(sel);
     const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
-    function uid(prefix="id") { return prefix + "_" + Math.random().toString(16).slice(2) + "_" + Date.now().toString(16); }
+    
+
+    // --- Preferencias UI / scoring ---
+    function getScoreMode() {
+      const el = document.querySelector('input[name="scoreMode"]:checked');
+      return el ? el.value : (db.settings?.scoreMode || "games");
+    }
+
+    function setScoreMode(mode) {
+      db.settings = db.settings || {};
+      db.settings.scoreMode = mode;
+      save();
+    }
+
+    
+    function updateScoreModeUI() {
+      const mode = getScoreMode();
+      const showGames = (mode === "games" || mode === "both");
+      const showPoints = (mode === "points" || mode === "both");
+      $$(".pairGamesWrap").forEach(el => el.style.display = showGames ? "" : "none");
+      $$(".pairPointsWrap").forEach(el => el.style.display = showPoints ? "" : "none");
+    }
+
+    function applyScoreModeToRadios() {
+      const mode = db.settings?.scoreMode || "games";
+      const map = { games: "#scoreModeGames", points: "#scoreModePoints", both: "#scoreModeBoth" };
+      const sel = map[mode] || "#scoreModeGames";
+      const el = $(sel);
+      if (el) el.checked = true;
+    }
+
+    function computeSuggestedRounds() {
+      const j = ensureCurrentJournalDraft();
+      const totalMin = Number($("#totalDurationMin")?.value || j.totalDurationMin || 90);
+      const courts = Number($("#courtsCount")?.value || j.courtCount || 3);
+      // Jugadoras seleccionadas: si no hay selección aún, usamos includeCount o total
+      const selected = (j.includeIds && j.includeIds.length) ? j.includeIds.length : Number($("#includeCount")?.value || db.players.length || 0);
+      const playersPerRound = Math.max(1, courts * 4);
+
+      // Heurística 1: rondas que den ~15 min por ronda (clamp 10..25)
+      let rounds = Math.round(totalMin / 15);
+      rounds = Math.max(1, rounds);
+      let perRound = totalMin / rounds;
+      if (perRound < 10) rounds = Math.max(1, Math.floor(totalMin / 10));
+      if (perRound > 25) rounds = Math.max(1, Math.ceil(totalMin / 25));
+
+      // Heurística 2: que cada jugadora juegue al menos ~3 partidos (si hay más jugadoras que huecos)
+      if (selected > 0) {
+        const minMatchesTarget = 3;
+        const roundsForMinMatches = Math.ceil((minMatchesTarget * selected) / playersPerRound);
+        // Subimos rondas si cabe sin bajar de 10 min por ronda
+        const maxRoundsByTime = Math.max(1, Math.floor(totalMin / 10));
+        rounds = Math.min(Math.max(rounds, roundsForMinMatches), maxRoundsByTime);
+      }
+
+      perRound = totalMin / rounds;
+      return { rounds, perRoundMin: perRound, selected, playersPerRound };
+    }
+
+    function renderSuggestedRounds() {
+      const el = $("#suggestedRoundsLabel");
+      const el2 = $("#suggestedRoundsExplain");
+      if (!el || !el2) return;
+      const s = computeSuggestedRounds();
+      el.textContent = `${s.rounds} rondas (~${Math.round(s.perRoundMin)} min/ronda)`;
+      if (s.selected > 0) {
+        const expectedMatchesPerPlayer = (s.rounds * s.playersPerRound) / s.selected;
+        el2.textContent = `Con ${s.selected} jugadoras y ${Math.round(s.playersPerRound/4)} pistas, cada jugadora jugará ~${expectedMatchesPerPlayer.toFixed(1)} partidos de media.`;
+      } else {
+        el2.textContent = `Ajusta jugadoras/pistas si quieres una sugerencia más precisa.`;
+      }
+    }
+
+    function applySuggestedRounds() {
+      const s = computeSuggestedRounds();
+      const inp = $("#matchCount");
+      if (inp) inp.value = String(s.rounds);
+      renderMatchDurationPreview();
+      savePlanDraftFromUI();
+      save();
+      render();
+    }
+
+    // --- Estadísticas (se calculan desde resultados guardados) ---
+    function computeStats() {
+      const stats = new Map();
+      for (const p of db.players) {
+        stats.set(p.id, {
+          id: p.id, name: p.name, role: p.role,
+          played: 0, wins: 0, losses: 0,
+          gamesFor: 0, gamesAgainst: 0,
+          pointsFor: 0, pointsAgainst: 0,
+        });
+      }
+
+      const pairAgg = new Map(); // "id1|id2" -> {wins,losses,gamesDiff,pointsDiff,played}
+
+      const j = getCurrentJournal();
+      const rounds = (j && j.schedule) ? j.schedule : [];
+      let matchesTotal = 0, gamesTotal = 0, pointsTotal = 0;
+
+      for (const r of rounds) {
+        if (!r.resultSaved || !r.result || !Array.isArray(r.result.courts)) continue;
+        for (const c of r.result.courts) {
+          matchesTotal++;
+          const aIds = c.teamA?.playerIds || [];
+          const bIds = c.teamB?.playerIds || [];
+          const gA = Number(c.teamA?.games || 0), gB = Number(c.teamB?.games || 0);
+          const pA = Number(c.teamA?.points || 0), pB = Number(c.teamB?.points || 0);
+
+          gamesTotal += (gA + gB);
+          pointsTotal += (pA + pB);
+
+          let winner = null; // "A"|"B"|null
+          if (gA !== gB) winner = gA > gB ? "A" : "B";
+          else if (pA !== pB) winner = pA > pB ? "A" : "B";
+
+          // jugadores A
+          for (const pid of aIds) {
+            const s = stats.get(pid);
+            if (!s) continue;
+            s.played++;
+            if (winner === "A") s.wins++; else if (winner === "B") s.losses++;
+            s.gamesFor += gA; s.gamesAgainst += gB;
+            s.pointsFor += pA; s.pointsAgainst += pB;
+          }
+          // jugadores B
+          for (const pid of bIds) {
+            const s = stats.get(pid);
+            if (!s) continue;
+            s.played++;
+            if (winner === "B") s.wins++; else if (winner === "A") s.losses++;
+            s.gamesFor += gB; s.gamesAgainst += gA;
+            s.pointsFor += pB; s.pointsAgainst += pA;
+          }
+
+          // parejas
+          const pairKeyA = pairKey(aIds[0], aIds[1]);
+          const pairKeyB = pairKey(bIds[0], bIds[1]);
+
+          const updPair = (k, isWin, gd, pd) => {
+            if (!k) return;
+            const o = pairAgg.get(k) || { played:0,wins:0,losses:0,gamesDiff:0,pointsDiff:0 };
+            o.played++;
+            if (isWin === true) o.wins++;
+            if (isWin === false) o.losses++;
+            o.gamesDiff += gd;
+            o.pointsDiff += pd;
+            pairAgg.set(k, o);
+          };
+
+          const gdA = gA - gB, gdB = gB - gA;
+          const pdA = pA - pB, pdB = pB - pA;
+          updPair(pairKeyA, winner==="A" ? true : winner==="B" ? false : null, gdA, pdA);
+          updPair(pairKeyB, winner==="B" ? true : winner==="A" ? false : null, gdB, pdB);
+        }
+      }
+
+      const statRows = Array.from(stats.values());
+      statRows.sort((x,y)=>{
+        // Partidos: wins desc, losses asc
+        if (y.wins !== x.wins) return y.wins - x.wins;
+        if (x.losses !== y.losses) return x.losses - y.losses;
+        const xGd = (x.gamesFor - x.gamesAgainst), yGd = (y.gamesFor - y.gamesAgainst);
+        if (yGd !== xGd) return yGd - xGd;
+        const xPd = (x.pointsFor - x.pointsAgainst), yPd = (y.pointsFor - y.pointsAgainst);
+        if (yPd !== xPd) return yPd - xPd;
+        if (y.gamesFor !== x.gamesFor) return y.gamesFor - x.gamesFor;
+        if (y.pointsFor !== x.pointsFor) return y.pointsFor - x.pointsFor;
+        return x.name.localeCompare(y.name);
+      });
+
+      const topPairs = Array.from(pairAgg.entries()).map(([k,v])=>({key:k,...v}));
+      topPairs.sort((a,b)=>{
+        if (b.wins !== a.wins) return b.wins - a.wins;
+        if (a.losses !== b.losses) return a.losses - b.losses;
+        if (b.gamesDiff !== a.gamesDiff) return b.gamesDiff - a.gamesDiff;
+        if (b.pointsDiff !== a.pointsDiff) return b.pointsDiff - a.pointsDiff;
+        return a.key.localeCompare(b.key);
+      });
+
+      const roundsPlayed = rounds.filter(r=>r.resultSaved).length;
+
+      return { statRows, topPairs, roundsPlayed, matchesTotal, gamesTotal, pointsTotal };
+    }
+
+    function renderStatsTab() {
+      const { statRows, topPairs, roundsPlayed, matchesTotal, gamesTotal, pointsTotal } = computeStats();
+
+      const tbody = $("#statsTable");
+      if (tbody) {
+        tbody.innerHTML = statRows.map((s, i) => {
+          const winPct = s.played ? Math.round((s.wins / s.played) * 100) : 0;
+          return `
+            <tr class="border-t">
+              <td class="p-3">${i+1}</td>
+              <td class="p-3 font-medium">${escapeHtml(s.name)}</td>
+              <td class="p-3">${roleLabel(s.role)}</td>
+              <td class="p-3">${s.played}</td>
+              <td class="p-3">${s.wins}</td>
+              <td class="p-3">${s.losses}</td>
+              <td class="p-3">${s.gamesFor}-${s.gamesAgainst}</td>
+              <td class="p-3">${s.pointsFor}-${s.pointsAgainst}</td>
+              <td class="p-3">${winPct}%</td>
+            </tr>
+          `;
+        }).join("");
+      }
+
+      const topEl = $("#topPairsList");
+      if (topEl) {
+        if (!topPairs.length) {
+          topEl.innerHTML = `<div class="text-slate-500 text-sm">Aún no hay resultados guardados.</div>`;
+        } else {
+          const items = topPairs.slice(0, 8).map((p, idx) => {
+            const [id1,id2] = p.key.split("|");
+            const a = getPlayer(id1), b = getPlayer(id2);
+            const name = `${a?.name||"¿?"} + ${b?.name||"¿?"}`;
+            return `<div class="flex items-center justify-between gap-3 border-b last:border-b-0 py-2">
+              <div class="text-sm"><span class="font-semibold">#${idx+1}</span> ${escapeHtml(name)}</div>
+              <div class="text-xs text-slate-600">${p.wins}-${p.losses} · ΔJ ${p.gamesDiff} · ΔP ${p.pointsDiff}</div>
+            </div>`;
+          }).join("");
+          topEl.innerHTML = `<div class="rounded-xl border bg-white">${items}</div>`;
+        }
+      }
+
+      $("#statRoundsPlayed2") && ($("#statRoundsPlayed2").textContent = String(roundsPlayed));
+      $("#statMatchesTotal") && ($("#statMatchesTotal").textContent = String(matchesTotal));
+      $("#statGamesTotal") && ($("#statGamesTotal").textContent = String(gamesTotal));
+      $("#statPointsTotal") && ($("#statPointsTotal").textContent = String(pointsTotal));
+    }
+
+function uid(prefix="id") { return prefix + "_" + Math.random().toString(16).slice(2) + "_" + Date.now().toString(16); }
 
     function roleLabel(r) { return r === "L" ? "IZQUIERDA" : r === "R" ? "DERECHA" : "COMODÍN"; }
 
@@ -432,6 +756,10 @@ Cris,C" rows="4"></textarea>
       $$(".tab").forEach(b => b.classList.remove("tab-active"));
       const btn = document.querySelector(`.tab[data-tab="${name}"]`);
       if (btn) btn.classList.add("tab-active");
+
+      // Render bajo demanda para evitar cálculos innecesarios
+      if (name === "ranking") renderRanking();
+      if (name === "stats") renderStatsTab();
     }
 
     function renderAll() {
@@ -508,6 +836,7 @@ Cris,C" rows="4"></textarea>
 
   const needed = courts > 0 ? 4 * courts : 0;
   $("#needPlayersHint").textContent = needed ? `Mínimo: ${needed} (4 × ${courts} pistas)` : "Mínimo: --";
+  renderSuggestedRounds();
 }
 
     function renderSchedule() {
@@ -587,14 +916,13 @@ Cris,C" rows="4"></textarea>
         `;
       }).join("");
 
-      // ✅ MEJORA: ahora pedimos puntos UNA sola vez por pareja (no por jugadora).
-      // Luego, al guardar, esos puntos se suman a las dos jugadoras de la pareja.
-      const pairInputs = [];
+      // ✅ Resultado configurable: Juegos / Puntos / Ambos
+      const pairCards = [];
       for (const c of round.courts) {
         const aL = getPlayer(c.pairA.leftId), aR = getPlayer(c.pairA.rightId);
         const bL = getPlayer(c.pairB.leftId), bR = getPlayer(c.pairB.rightId);
 
-        pairInputs.push({
+        pairCards.push({
           courtNo: c.courtNo,
           team: "A",
           label: `Pista ${c.courtNo} · Pareja A`,
@@ -602,7 +930,7 @@ Cris,C" rows="4"></textarea>
           playerIds: [c.pairA.leftId, c.pairA.rightId]
         });
 
-        pairInputs.push({
+        pairCards.push({
           courtNo: c.courtNo,
           team: "B",
           label: `Pista ${c.courtNo} · Pareja B`,
@@ -613,23 +941,36 @@ Cris,C" rows="4"></textarea>
 
       $("#resultsGrid").innerHTML = `
         <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-          ${pairInputs.map((pi, idx) => `
-            <div class="rounded-2xl border bg-slate-50 p-3">
+          ${pairCards.map((pi) => `
+            <div class="pairCard rounded-2xl border bg-slate-50 p-4"
+                 data-court="${pi.courtNo}" data-team="${pi.team}" data-players="${pi.playerIds.join(",")}">
               <div class="text-sm font-semibold">${escapeHtml(pi.label)}</div>
               <div class="text-xs text-slate-600 mt-1">${escapeHtml(pi.names)}</div>
 
-              <label class="block text-xs text-slate-600 mt-3">Puntos ganados por la pareja</label>
-              <input type="number" min="0" step="1"
-                     class="pairPointsInput w-full rounded-xl border px-3 py-2 mt-1"
-                     data-players="${pi.playerIds.join(",")}"
-                     placeholder="0" disabled />
+              <div class="pairGamesWrap mt-3">
+                <label class="block text-xs text-slate-600">Juegos</label>
+                <input type="number" min="0" step="1" inputmode="numeric" pattern="[0-9]*"
+                       class="pairGamesInput w-full rounded-xl border px-3 py-3 mt-1"
+                       placeholder="0" disabled />
+              </div>
+
+              <div class="pairPointsWrap mt-3">
+                <label class="block text-xs text-slate-600">Puntos</label>
+                <input type="number" min="0" step="1" inputmode="numeric" pattern="[0-9]*"
+                       class="pairPointsInput w-full rounded-xl border px-3 py-3 mt-1"
+                       placeholder="0" disabled />
+              </div>
             </div>
           `).join("")}
         </div>
         <p class="text-xs text-slate-500 mt-3">
-          Nota: los puntos introducidos se suman a <b>las dos jugadoras</b> de la pareja.
+          Nota: introduce el marcador por pareja. El sistema calculará ranking por <b>Partidos</b> → <b>Juegos</b> → <b>Puntos</b>.
         </p>
       `;
+
+      applyScoreModeToRadios();
+      updateScoreModeUI();
+
 
       if (!$("#resultDate").value) $("#resultDate").value = new Date().toISOString().slice(0,10);
 
@@ -647,18 +988,27 @@ Cris,C" rows="4"></textarea>
       $("#statDuration").textContent = fmtMMSS(j.durationSec);
     }
 
-    function renderRanking() {
-      const rows = db.players.slice().sort((a,b)=>(b.pointsTotal||0)-(a.pointsTotal||0)).map((p,i)=>`
+    
+function renderRanking() {
+      const { statRows } = computeStats();
+
+      const rows = statRows.map((s,i)=>`
         <tr class="border-t">
           <td class="p-3">${i+1}</td>
-          <td class="p-3 font-medium">${escapeHtml(p.name)}</td>
-          <td class="p-3">${roleLabel(p.role)}</td>
-          <td class="p-3">${p.pointsTotal || 0}</td>
-          <td class="p-3">${countMatchesForPlayer(p.id)}</td>
+          <td class="p-3 font-medium">${escapeHtml(s.name)}</td>
+          <td class="p-3">${roleLabel(s.role)}</td>
+          <td class="p-3">${s.wins}-${s.losses}</td>
+          <td class="p-3">${s.gamesFor}-${s.gamesAgainst}</td>
+          <td class="p-3">${s.pointsFor}-${s.pointsAgainst}</td>
+          <td class="p-3">${s.played}</td>
         </tr>
       `).join("");
-      $("#rankingTable").innerHTML = rows || `<tr><td class="p-3 text-slate-500" colspan="5">No hay jugadoras.</td></tr>`;
+
+      $("#rankingTable").innerHTML = rows || `<tr><td class="p-3 text-slate-500" colspan="7">Aún no hay datos.</td></tr>`;
+
+      $("#rankingNote").textContent = "Orden: Partidos (G/P) → Juegos → Puntos.";
     }
+
 
     function renderHistory() {
       const wrap = $("#journalsList");
@@ -1210,6 +1560,7 @@ function onTimerFinished() {
 
     function disableResultsUI(disabled) {
       $$(".pairPointsInput").forEach(inp => inp.disabled = disabled);
+      $$(".pairGamesInput").forEach(inp => inp.disabled = disabled);
       $("#btnSaveResult").disabled = disabled;
       if (disabled) $("#btnNextMatch").disabled = true;
     }
@@ -1241,38 +1592,80 @@ function onTimerFinished() {
       const date = $("#resultDate").value;
       if (!date) return showMatchMessage("error","Introduce la fecha.");
 
-      const pointsByPlayer = new Map();
+      const mode = getScoreMode();
+      const showGames = (mode === "games" || mode === "both");
+      const showPoints = (mode === "points" || mode === "both");
 
-      // ✅ MEJORA: leemos puntos por PAREJA y los aplicamos a las 2 jugadoras de esa pareja.
-      // Cada input lleva data-players="id1,id2" (las dos jugadoras de la pareja).
-      let totalInputs = 0;
+      const courts = new Map(); // courtNo -> {A:{playerIds,games,points}, B:{...}}
+      let totalPairs = 0;
 
-      $$(".pairPointsInput").forEach(inp => {
-        const playersCsv = inp.dataset.players || "";
-        const ids = playersCsv.split(",").map(x => x.trim()).filter(Boolean);
-        const val = Number(inp.value || 0);
+      $$(".pairCard").forEach(card => {
+        const courtNo = Number(card.dataset.court || 0);
+        const team = card.dataset.team || "";
+        const ids = (card.dataset.players || "").split(",").map(x=>x.trim()).filter(Boolean);
+        if (!courtNo || (team !== "A" && team !== "B") || ids.length !== 2) return;
 
-        if (!Number.isFinite(val) || val < 0) return; // ignoramos valores inválidos
-        if (ids.length !== 2) return;                 // seguridad: una pareja siempre son 2 jugadoras
+        const g = Number(card.querySelector(".pairGamesInput")?.value || 0);
+        const p = Number(card.querySelector(".pairPointsInput")?.value || 0);
 
-        // Sumamos estos puntos a cada una de las dos jugadoras de la pareja.
-        for (const pid of ids) {
-          pointsByPlayer.set(pid, (pointsByPlayer.get(pid) || 0) + val);
-        }
-        totalInputs++;
+        if ((showGames && (!Number.isFinite(g) || g < 0)) || (showPoints && (!Number.isFinite(p) || p < 0))) return;
+
+        const entry = courts.get(courtNo) || { A:null, B:null };
+        entry[team] = { playerIds: ids, games: showGames ? g : 0, points: showPoints ? p : 0 };
+        courts.set(courtNo, entry);
+        totalPairs++;
       });
 
-      // Validación: debe haber 2 inputs por pista (Pareja A y Pareja B).
-      const expected = 2 * (j.courtCount || 1);
-      if (totalInputs < expected) return showMatchMessage("error","Faltan puntos en alguna pareja.");
-for (const [pid, pts] of pointsByPlayer.entries()) {
-        const p = getPlayer(pid);
-        if (p) p.pointsTotal = (p.pointsTotal || 0) + pts;
+      const expectedPairs = 2 * (j.courtCount || 1);
+      if (totalPairs < expectedPairs) return showMatchMessage("error","Faltan marcadores en alguna pareja.");
+
+      // Guardamos resultado por pista y actualizamos puntosTotal (solo si se usan puntos)
+      const resultCourts = [];
+      const pointsByPlayer = new Map();
+      const gamesByPlayer = new Map();
+
+      for (const [courtNo, entry] of courts.entries()) {
+        if (!entry.A || !entry.B) return showMatchMessage("error",`Falta marcador en pista ${courtNo}.`);
+
+        const gA = Number(entry.A.games || 0), gB = Number(entry.B.games || 0);
+        const pA = Number(entry.A.points || 0), pB = Number(entry.B.points || 0);
+
+        // Repartimos marcadores a jugadoras (para export/import y stats)
+        for (const pid of entry.A.playerIds) {
+          gamesByPlayer.set(pid, (gamesByPlayer.get(pid) || 0) + gA);
+          pointsByPlayer.set(pid, (pointsByPlayer.get(pid) || 0) + pA);
+        }
+        for (const pid of entry.B.playerIds) {
+          gamesByPlayer.set(pid, (gamesByPlayer.get(pid) || 0) + gB);
+          pointsByPlayer.set(pid, (pointsByPlayer.get(pid) || 0) + pB);
+        }
+
+        resultCourts.push({
+          courtNo,
+          teamA: { playerIds: entry.A.playerIds, games: gA, points: pA },
+          teamB: { playerIds: entry.B.playerIds, games: gB, points: pB },
+        });
+      }
+
+      // Actualizamos puntosTotal solo si el modo incluye puntos (para que la tabla de Jugadoras siga mostrando algo)
+      if (showPoints) {
+        for (const [pid, pts] of pointsByPlayer.entries()) {
+          const p = getPlayer(pid);
+          if (p) p.pointsTotal = (p.pointsTotal || 0) + pts;
+        }
       }
 
       round.resultSaved = true;
-      round.result = { date, comment: ($("#resultComment").value || "").trim(), points: Object.fromEntries(pointsByPlayer.entries()) };
+      round.result = {
+        date,
+        comment: ($("#resultComment").value || "").trim(),
+        mode,
+        points: Object.fromEntries(pointsByPlayer.entries()),
+        games: Object.fromEntries(gamesByPlayer.entries()),
+        courts: resultCourts
+      };
 
+      // Historial de parejas (para evitar repetición)
       for (const c of round.courts) {
         const k1 = pairKey(c.pairA.leftId, c.pairA.rightId);
         const k2 = pairKey(c.pairB.leftId, c.pairB.rightId);
@@ -1285,11 +1678,7 @@ for (const [pid, pts] of pointsByPlayer.entries()) {
       $("#resultComment").value = "";
       save();
 
-      // ✅ MEJORA: al guardar el resultado, pasamos automáticamente a la siguiente ronda.
-      // Usamos un pequeño retraso para que el usuario vea el mensaje.
-      setTimeout(() => {
-        goNextRound();
-      }, 400);
+      setTimeout(() => { goNextRound(); }, 400);
     }
 
     function goNextRound() {
@@ -1490,6 +1879,20 @@ for (const [pid, pts] of pointsByPlayer.entries()) {
 
     function bindEvents() {
       $$(".tab").forEach(btn => btn.addEventListener("click", () => setTab(btn.dataset.tab)));
+
+      // Sugerencia automática de rondas
+      $("#btnApplySuggestedRounds")?.addEventListener("click", applySuggestedRounds);
+      ["courtsCount","includeCount","totalDurationMin","matchCount"].forEach(id=>{
+        const el = $("#"+id);
+        if (el) el.addEventListener("input", () => { renderSuggestedRounds(); renderMatchDurationPreview(); });
+      });
+
+      // Tipo de marcador (Juegos / Puntos / Ambos)
+      $$('input[name="scoreMode"]').forEach(r => r.addEventListener("change", () => {
+        setScoreMode(getScoreMode());
+        updateScoreModeUI();
+      }));
+
 
       $("#btnAddPlayer").addEventListener("click", addPlayer);
       $("#btnBulkImport").addEventListener("click", bulkImport);
