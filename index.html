@@ -496,11 +496,9 @@ Cris,C" rows="4"></textarea>
 
         <div class="flex flex-wrap gap-2">
           <button id="btnAddVets" class="btn-success px-4 py-2 rounded-xl font-medium">Añadir jugadora</button>
-          <button id="btnCancelEditVets" class="btn-secondary px-4 py-2 rounded-xl font-medium hidden">Cancelar edición</button>
           <button id="btnRecalcVets" class="btn-primary px-4 py-2 rounded-xl font-medium">Recalcular parejas</button>
           <button id="btnClearVets" class="btn-danger px-4 py-2 rounded-xl font-medium">Borrar lista</button>
         </div>
-        <div id="vEditHint" class="text-xs text-slate-600 mt-2 hidden">Editando: <b id="vEditName"></b></div>
 
         <div class="text-xs text-slate-500">
           Nota: si una jugadora no tiene edad, <b>no podrá jugar Veteranas</b> (pero puede seguir en Americanas).
@@ -2310,99 +2308,6 @@ function getVetsPlayers() {
   return Array.isArray(db.veteranasPlayers) ? db.veteranasPlayers : (db.veteranasPlayers = []);
 }
 
-
-function beginEditVetsPlayer(id) {
-  const list = getVetsPlayers();
-  const p = list.find(x => x.id === id);
-  if (!p) return;
-
-  db.veteranasEditId = id;
-
-  $("#vName").value = p.name || "";
-  $("#vSide").value = p.side || "L";
-  $("#vAge").value = (Number.isFinite(p.age) && p.age !== null) ? String(p.age) : "";
-
-  // UI
-  const hint = document.getElementById("vEditHint");
-  const hintName = document.getElementById("vEditName");
-  if (hint && hintName) {
-    hintName.textContent = p.name || "";
-    hint.classList.remove("hidden");
-  }
-  const btn = document.getElementById("btnAddVets");
-  if (btn) btn.textContent = "Guardar cambios";
-  document.getElementById("btnCancelEditVets")?.classList.remove("hidden");
-}
-
-function cancelEditVetsPlayer() {
-  db.veteranasEditId = null;
-
-  // Reset inputs
-  $("#vName").value = "";
-  $("#vAge").value = "";
-  $("#vSide").value = "L";
-
-  // UI
-  document.getElementById("btnAddVets")?.setAttribute("data-mode", "add");
-  const btn = document.getElementById("btnAddVets");
-  if (btn) btn.textContent = "Añadir jugadora";
-  document.getElementById("btnCancelEditVets")?.classList.add("hidden");
-  document.getElementById("vEditHint")?.classList.add("hidden");
-}
-
-function purgeVetsIdFromState(id) {
-  // Si la jugadora estaba usada en slots manuales o en parejas generadas, la quitamos
-  if (Array.isArray(db.veteranasManualSlots)) {
-    db.veteranasManualSlots = db.veteranasManualSlots.map(s => ({
-      ...s,
-      L: (s.L === id) ? null : s.L,
-      R: (s.R === id) ? null : s.R,
-    }));
-  }
-  // Limpiamos parejas/seen porque pueden quedar inconsistentes tras cambios de edad/posición
-  db.veteranasPairs = [];
-  db.veteranasSeen = [];
-  if (db.veteranasMeta) { db.veteranasMeta.noMore = false; db.veteranasMeta.lastMsg = ""; }
-}
-
-function saveVetsPlayerEdit() {
-  const id = db.veteranasEditId;
-  if (!id) { addVetsPlayer(); return; }
-
-  const list = getVetsPlayers();
-  const p = list.find(x => x.id === id);
-  if (!p) { cancelEditVetsPlayer(); return; }
-
-  const name = ($("#vName").value || "").trim();
-  const side = $("#vSide").value;
-  const ageRaw = ($("#vAge").value || "").trim();
-  const age = ageRaw === "" ? null : Number(ageRaw);
-
-  if (!name) { alert("Introduce un nombre."); return; }
-  if (ageRaw !== "" && (!Number.isFinite(age) || age <= 0)) { alert("Edad no válida."); return; }
-
-  p.name = name;
-  p.side = side;
-  p.age = age;
-
-  // Si no tiene edad, no es elegible: la desmarcamos
-  if (!(Number.isFinite(p.age) && p.age !== null)) {
-    p.selected = false;
-  }
-
-  purgeVetsIdFromState(id);
-
-  save();
-  cancelEditVetsPlayer();
-  renderVeteranas();
-}
-
-function onAddOrSaveVetsPlayer() {
-  if (db.veteranasEditId) return saveVetsPlayerEdit();
-  return addVetsPlayer();
-}
-
-
 function addVetsPlayer() {
   const name = ($("#vName").value || "").trim();
   const side = $("#vSide").value;
@@ -2430,6 +2335,72 @@ function deleteVetsPlayer(id) {
   if (db.veteranasMeta) { db.veteranasMeta.noMore = false; db.veteranasMeta.lastMsg = ""; }
   save();
 }
+
+
+function editVetsPlayer(id) {
+  ensureVeteranasState();
+  const list = getVetsPlayers();
+  const p = list.find(x => x.id === id);
+  if (!p) return;
+
+  // Pedimos datos (simple y robusto en móvil)
+  const newName = prompt("Nombre:", p.name ?? "");
+  if (newName === null) return; // cancel
+
+  const posMap = { "I": "L", "D": "R", "C": "J" };
+  const revMap = { "L": "I", "R": "D", "J": "C" };
+  const curPos = revMap[p.side] || "C";
+  const newPosRaw = prompt("Posición (I=Izquierda, D=Derecha, C=Comodín):", curPos);
+  if (newPosRaw === null) return;
+
+  const newPosKey = String(newPosRaw).trim().toUpperCase();
+  const newSide = posMap[newPosKey];
+  if (!newSide) {
+    alert("Posición inválida. Usa I, D o C.");
+    return;
+  }
+
+  const curAge = Number.isFinite(p.age) ? String(p.age) : "";
+  const newAgeRaw = prompt("Edad (vacío si no aplica):", curAge);
+  if (newAgeRaw === null) return;
+
+  const ageTrim = String(newAgeRaw).trim();
+  let newAge = null;
+  if (ageTrim !== "") {
+    const n = Number(ageTrim);
+    if (!Number.isFinite(n) || n <= 0) {
+      alert("Edad inválida.");
+      return;
+    }
+    newAge = Math.floor(n);
+  }
+
+  p.name = String(newName).trim() || p.name;
+  p.side = newSide;
+  p.age = newAge;
+
+  // Si se queda sin edad, no es elegible para veteranas (y lo desmarcamos)
+  if (!Number.isFinite(p.age) || p.age === null) {
+    p.selected = false;
+  }
+
+  // Invalida combinaciones actuales (porque cambió el universo)
+  db.veteranasPairs = [];
+  db.veteranasSeen = [];
+  if (db.veteranasMeta) { db.veteranasMeta.noMore = false; db.veteranasMeta.lastMsg = ""; }
+
+  // Limpia selecciones manuales que incluyan a esta jugadora (por seguridad)
+  if (db.veteranasManual && Array.isArray(db.veteranasManual.slots)) {
+    db.veteranasManual.slots = db.veteranasManual.slots.map(s => ({
+      L: (s.L === id ? null : s.L),
+      R: (s.R === id ? null : s.R),
+    }));
+    db.veteranasManual.msg = "";
+  }
+
+  save();
+}
+
 
 function clearVetsPlayers() {
   const ok = confirm("¿Borrar la lista de jugadoras para Veteranas?");
@@ -2855,13 +2826,10 @@ function renderVeteranas() {
   tbody.querySelectorAll("[data-vdel]").forEach(btn => {
     btn.addEventListener("click", () => deleteVetsPlayer(btn.getAttribute("data-vdel")));
   });
-
   // bind edit buttons
   tbody.querySelectorAll("[data-vedit]").forEach(btn => {
-    btn.addEventListener("click", () => beginEditVetsPlayer(btn.getAttribute("data-vedit")));
-  });
-
-  // bind selection checkboxes
+    btn.addEventListener("click", () => editVetsPlayer(btn.getAttribute("data-vedit")));
+  });// bind selection checkboxes
   tbody.querySelectorAll("[data-vsel]").forEach(chk => {
     chk.addEventListener("change", () => {
       const id = chk.getAttribute("data-vsel");
@@ -3101,8 +3069,7 @@ function renderVeteranas() {
 }
 
 // Eventos UI Veteranas
-document.getElementById("btnAddVets")?.addEventListener("click", onAddOrSaveVetsPlayer);
-document.getElementById("btnCancelEditVets")?.addEventListener("click", cancelEditVetsPlayer);
+document.getElementById("btnAddVets")?.addEventListener("click", addVetsPlayer);
 document.getElementById("btnRecalcVets")?.addEventListener("click", () => {
   recalcVeteranas();
   // Al recalcular, cambia a pestaña veteranas por si el usuario estaba ya ahí (sin saltos)
@@ -3112,10 +3079,10 @@ document.getElementById("btnClearVets")?.addEventListener("click", clearVetsPlay
 
 // Enter para añadir
 document.getElementById("vName")?.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") onAddOrSaveVetsPlayer();
+  if (e.key === "Enter") addVetsPlayer();
 });
 document.getElementById("vAge")?.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") onAddOrSaveVetsPlayer();
+  if (e.key === "Enter") addVetsPlayer();
 });
 
 </script>
