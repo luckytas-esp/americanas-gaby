@@ -464,6 +464,7 @@ Cris,C" rows="4"></textarea>
         <table class="min-w-full text-sm">
           <thead>
             <tr class="text-left text-slate-600 border-b">
+              <th class="py-2 pr-3">Usar</th>
               <th class="py-2 pr-3">Nombre</th>
               <th class="py-2 pr-3">Posición</th>
               <th class="py-2 pr-3">Edad</th>
@@ -506,7 +507,7 @@ Cris,C" rows="4"></textarea>
      ***********************************************************************/
 
     const STORAGE_KEY = "padel_jornada_manager_v2_courts";
-    let db = { players: [], pairHistory: [], journals: [], currentJournalId: null, veteranasPlayers: [], veteranasPairs: [] };
+    let db = { players: [], pairHistory: [], journals: [], currentJournalId: null, veteranasPlayers: [], veteranasPairs: [], veteranasSeen: [], veteranasMeta: { noMore: false, lastMsg: "" } };
 
     // ✅ Estado de UI: qué jornada estamos viendo en detalle (no hace falta guardarlo en LocalStorage)
     let selectedJournalId = null;
@@ -2085,11 +2086,24 @@ function isValidDbShape(obj) {
 
 function normalizeImportedDb(obj) {
   // Mantiene la estructura mínima y añade defaults por si faltan campos.
+  const vetsPlayers = Array.isArray(obj.veteranasPlayers) ? obj.veteranasPlayers : [];
+  const vetsPlayersNorm = vetsPlayers.map(p => ({
+    id: p.id ?? (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()),
+    name: p.name ?? "",
+    side: p.side ?? "J",
+    age: (p.age === null || p.age === undefined || p.age === "") ? null : Number(p.age),
+    selected: (p.selected === undefined) ? true : !!p.selected
+  }));
+
   return {
     players: Array.isArray(obj.players) ? obj.players : [],
     pairHistory: Array.isArray(obj.pairHistory) ? obj.pairHistory : [],
     journals: Array.isArray(obj.journals) ? obj.journals : [],
-    currentJournalId: obj.currentJournalId ?? null
+    currentJournalId: obj.currentJournalId ?? null,
+    veteranasPlayers: vetsPlayersNorm,
+    veteranasPairs: Array.isArray(obj.veteranasPairs) ? obj.veteranasPairs : [],
+    veteranasSeen: Array.isArray(obj.veteranasSeen) ? obj.veteranasSeen : [],
+    veteranasMeta: obj.veteranasMeta ?? { noMore: false, lastMsg: "" }
   };
 }
 
@@ -2149,8 +2163,11 @@ function addVetsPlayer() {
   if (!name) { alert("Introduce un nombre."); return; }
   if (ageRaw !== "" && (!Number.isFinite(age) || age <= 0)) { alert("Edad no válida."); return; }
 
-  const p = { id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(), name, side, age };
+  const p = { id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(), name, side, age, selected: true };
   getVetsPlayers().push(p);
+  db.veteranasPairs = [];
+  db.veteranasSeen = [];
+  if (db.veteranasMeta) { db.veteranasMeta.noMore = false; db.veteranasMeta.lastMsg = ""; }
   // Limpia inputs
   $("#vName").value = "";
   $("#vAge").value = "";
@@ -2159,6 +2176,9 @@ function addVetsPlayer() {
 
 function deleteVetsPlayer(id) {
   db.veteranasPlayers = getVetsPlayers().filter(p => p.id !== id);
+  db.veteranasPairs = [];
+  db.veteranasSeen = [];
+  if (db.veteranasMeta) { db.veteranasMeta.noMore = false; db.veteranasMeta.lastMsg = ""; }
   save();
 }
 
@@ -2167,11 +2187,13 @@ function clearVetsPlayers() {
   if (!ok) return;
   db.veteranasPlayers = [];
   db.veteranasPairs = [];
+  db.veteranasSeen = [];
+  if (db.veteranasMeta) { db.veteranasMeta.noMore = false; db.veteranasMeta.lastMsg = ""; }
   save();
 }
 
 function eligibleVetsPlayers() {
-  return getVetsPlayers().filter(p => Number.isFinite(p.age) && p.age !== null);
+  return getVetsPlayers().filter(p => (p.selected !== false) && Number.isFinite(p.age) && p.age !== null);
 }
 
 function isValidPair(a, b) {
@@ -2202,17 +2224,38 @@ function makePairsFromPlayers(players) {
   return pairs;
 }
 
-function solveVeteranas(players, thresholds = VET_THRESHOLDS) {
+function solutionSignatureFromPairs(pairs) {
+  // Firma estable para comparar soluciones: pares ordenados por ids y luego concatenados.
+  // Formato: "idA-idB|idC-idD|..."
+  const parts = pairs.map(p => {
+    const ids = [p.aId, p.bId].sort();
+    return ids[0] + "-" + ids[1];
+  }).sort();
+  return parts.join("|");
+}
+
+function shuffleArray(arr) {
+  // Fisher–Yates
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function solveVeteranas(players, thresholds = VET_THRESHOLDS, excludeSigs = new Set()) {
   // Backtracking: asigna 5 parejas sin solape cumpliendo umbrales.
+  // Además: evita repetir soluciones ya vistas (excludeSigs).
   const byId = new Map(players.map(p => [p.id, p]));
   const allPairs = makePairsFromPlayers(players);
 
-  // Precompute candidates per threshold (descending for search)
+  // Candidatos por umbral (buscamos de mayor a menor para garantizar 95 primero, etc.)
   const thDesc = [...thresholds].sort((x, y) => y - x);
   const candidates = new Map();
   for (const th of thDesc) {
-    const c = allPairs.filter(p => p.sum >= th)
-      .sort((p1, p2) => p1.sum - p2.sum); // prefer mínimos para conservar edades altas
+    const c = allPairs
+      .filter(p => p.sum >= th)
+      .sort((p1, p2) => p1.sum - p2.sum); // preferimos mínimos para conservar edades altas
     candidates.set(th, c);
   }
 
@@ -2220,10 +2263,19 @@ function solveVeteranas(players, thresholds = VET_THRESHOLDS) {
   const chosen = [];
 
   function rec(k) {
-    if (k === thDesc.length) return true;
+    if (k === thDesc.length) {
+      const sig = solutionSignatureFromPairs(chosen);
+      if (excludeSigs.has(sig)) return false;
+      return true;
+    }
+
     const th = thDesc[k];
     const cands = candidates.get(th);
-    for (const pr of cands) {
+
+    // Aleatorizamos un poco para que "Recalcular" proponga alternativas.
+    const cands2 = shuffleArray([...cands]);
+
+    for (const pr of cands2) {
       if (used.has(pr.aId) || used.has(pr.bId)) continue;
       used.add(pr.aId); used.add(pr.bId);
       chosen.push({ threshold: th, ...pr });
@@ -2235,9 +2287,36 @@ function solveVeteranas(players, thresholds = VET_THRESHOLDS) {
   }
 
   const ok = rec(0);
-  if (!ok) return { ok: false, pairs: [], reason: "No hay una combinación válida con las edades/posiciones actuales." };
+  if (!ok) {
+    // Si no encontramos, puede ser porque no hay solución en general, o porque ya hemos excluido todas las existentes.
+    // Hacemos una comprobación rápida: ¿existe al menos una solución SIN excluir?
+    const okAny = (function existsAny() {
+      const used2 = new Set();
+      const chosen2 = [];
+      function rec2(k) {
+        if (k === thDesc.length) return true;
+        const th = thDesc[k];
+        const cands = candidates.get(th);
+        for (const pr of cands) {
+          if (used2.has(pr.aId) || used2.has(pr.bId)) continue;
+          used2.add(pr.aId); used2.add(pr.bId);
+          chosen2.push(pr);
+          if (rec2(k + 1)) return true;
+          chosen2.pop();
+          used2.delete(pr.aId); used2.delete(pr.bId);
+        }
+        return false;
+      }
+      return rec2(0);
+    })();
 
-  // Convert to display order ascending threshold 75..95
+    if (okAny) {
+      return { ok: false, pairs: [], noMore: true, reason: "No hay más combinaciones nuevas posibles con la selección actual." };
+    }
+    return { ok: false, pairs: [], noMore: false, reason: "No hay una combinación válida con las edades/posiciones actuales." };
+  }
+
+  // Convertimos al orden 75..95
   const chosenMap = new Map(chosen.map(x => [x.threshold, x]));
   const ordered = thresholds.map(th => chosenMap.get(th)).filter(Boolean).map(x => ({
     threshold: x.threshold,
@@ -2246,24 +2325,55 @@ function solveVeteranas(players, thresholds = VET_THRESHOLDS) {
     b: byId.get(x.bId),
   }));
 
-  return { ok: true, pairs: ordered };
+  return { ok: true, pairs: ordered, sig: solutionSignatureFromPairs(chosen) };
 }
 
 function recalcVeteranas() {
   const players = eligibleVetsPlayers();
+
+  // Reiniciamos estado de mensajes
+  if (!db.veteranasMeta) db.veteranasMeta = { noMore: false, lastMsg: "" };
+  db.veteranasMeta.noMore = false;
+  db.veteranasMeta.lastMsg = "";
+
   if (players.length < 10) {
     db.veteranasPairs = [];
+    db.veteranasSeen = db.veteranasSeen || [];
     save();
     return;
   }
-  const res = solveVeteranas(players);
+
+  db.veteranasSeen = Array.isArray(db.veteranasSeen) ? db.veteranasSeen : [];
+  const exclude = new Set(db.veteranasSeen);
+
+  // Evitar repetir también la solución actual (aunque no esté en seen)
+  if (Array.isArray(db.veteranasPairs) && db.veteranasPairs.length) {
+    try {
+      const currentSig = solutionSignatureFromPairs(db.veteranasPairs.map(p => ({
+        aId: p.a?.id || p.aId,
+        bId: p.b?.id || p.bId
+      })));
+      if (currentSig) exclude.add(currentSig);
+    } catch (e) {}
+  }
+
+  const res = solveVeteranas(players, VET_THRESHOLDS, exclude);
+
   if (!res.ok) {
-    db.veteranasPairs = [];
+    if (res.noMore) {
+      db.veteranasMeta.noMore = true;
+      db.veteranasMeta.lastMsg = res.reason;
+      // mantenemos la solución actual si existe; si no, dejamos vacío
+    } else {
+      db.veteranasPairs = [];
+      db.veteranasMeta.lastMsg = res.reason;
+    }
     save();
-    // message handled in render
     return;
   }
+
   db.veteranasPairs = res.pairs;
+  if (res.sig) db.veteranasSeen.push(res.sig);
   save();
 }
 
@@ -2277,10 +2387,16 @@ function renderVeteranas() {
   document.getElementById("vEligibleCount").textContent = String(elig.length);
 
   tbody.innerHTML = list.map(p => {
-    const age = (p.age === null || p.age === undefined || p.age === "") ? "—" : String(p.age);
-    const badge = (p.age === null || p.age === undefined || p.age === "") ? '<span class="text-xs px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">Sin edad (no elegible)</span>' : '';
+    const hasAge = Number.isFinite(p.age) && p.age !== null;
+    const age = (!hasAge) ? "—" : String(p.age);
+    const badge = (!hasAge) ? '<span class="text-xs px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">Sin edad (no elegible)</span>' : '';
+    const checked = (p.selected !== false) && hasAge ? "checked" : "";
+    const disabled = hasAge ? "" : "disabled";
     return `
       <tr class="border-b">
+        <td class="py-2 pr-3">
+          <input type="checkbox" class="h-4 w-4 accent-sky-600" data-vsel="${p.id}" ${checked} ${disabled}/>
+        </td>
         <td class="py-2 pr-3 font-medium">${escapeHtml(p.name)}</td>
         <td class="py-2 pr-3">${sideLabel(p.side)}</td>
         <td class="py-2 pr-3">${age} ${badge}</td>
@@ -2293,6 +2409,21 @@ function renderVeteranas() {
   // bind delete buttons
   tbody.querySelectorAll("[data-vdel]").forEach(btn => {
     btn.addEventListener("click", () => deleteVetsPlayer(btn.getAttribute("data-vdel")));
+  });// bind selection checkboxes
+  tbody.querySelectorAll("[data-vsel]").forEach(chk => {
+    chk.addEventListener("change", () => {
+      const id = chk.getAttribute("data-vsel");
+      const listNow = getVetsPlayers();
+      const p = listNow.find(x => x.id === id);
+      if (!p) return;
+      p.selected = chk.checked;
+      // Si cambia la selección, invalidamos parejas actuales y el historial de soluciones,
+      // porque el espacio de búsqueda ha cambiado.
+      db.veteranasPairs = [];
+      db.veteranasSeen = [];
+      if (db.veteranasMeta) { db.veteranasMeta.noMore = false; db.veteranasMeta.lastMsg = ""; }
+      save();
+    });
   });
 
   // Render pairs
@@ -2307,6 +2438,10 @@ function renderVeteranas() {
   }
 
   if (!pairs.length) {
+    if (db.veteranasMeta && db.veteranasMeta.noMore) {
+      msg.innerHTML = `<b>No es posible generar más parejas nuevas</b> con la selección actual.<br/>${escapeHtml(db.veteranasMeta.lastMsg || "")}`;
+      return;
+    }
     msg.innerHTML = `No se pudo generar una combinación válida con las jugadoras actuales. Prueba a:
       <ul class="list-disc ml-5 mt-2">
         <li>Añadir más jugadoras con edad</li>
