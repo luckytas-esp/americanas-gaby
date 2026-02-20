@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v1.5.0";
+const CACHE_VERSION = "v1.5.1";
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `runtime-${CACHE_VERSION}`;
 
