@@ -52,6 +52,7 @@
 <button class="tab px-3 py-2 rounded-xl text-sm font-medium hover:bg-slate-100" data-tab="ranking">4) Ranking</button>
 <button class="tab px-3 py-2 rounded-xl text-sm font-medium hover:bg-slate-100" data-tab="stats">5) Estadísticas</button>
 <button class="tab px-3 py-2 rounded-xl text-sm font-medium hover:bg-slate-100" data-tab="history">6) Historial</button>
+<button class="tab px-3 py-2 rounded-xl text-sm font-medium hover:bg-slate-100" data-tab="veteranas">7) Veteranas</button>
 </div>
 </nav>
 <!-- TAB 1: Jugadoras -->
@@ -412,7 +413,81 @@ Cris,C" rows="4"></textarea>
 </div>
 </div>
 </section>
-<footer class="mt-10 text-xs text-slate-500">
+<footer class="mt-1<!-- TAB 7: Veteranas -->
+<section class="tab-panel mt-6 hidden" id="tab-veteranas">
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div class="bg-white border rounded-2xl shadow-sm p-4">
+      <h2 class="text-lg font-semibold">Competición Veteranas</h2>
+      <p class="text-sm text-slate-600 mt-1">
+        Genera 5 parejas cumpliendo suma de edades y posiciones (Izquierda/Derecha; Comodín vale para ambas).
+      </p>
+
+      <div class="mt-4 space-y-3">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="text-sm font-medium text-slate-700">Nombre</label>
+            <input id="vName" class="mt-1 w-full border rounded-xl px-3 py-2" placeholder="Ej. Gaby" />
+          </div>
+          <div>
+            <label class="text-sm font-medium text-slate-700">Posición</label>
+            <select id="vSide" class="mt-1 w-full border rounded-xl px-3 py-2">
+              <option value="L">Izquierda</option>
+              <option value="R">Derecha</option>
+              <option value="J">Comodín</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-sm font-medium text-slate-700">Edad (opcional)</label>
+            <input id="vAge" class="mt-1 w-full border rounded-xl px-3 py-2" inputmode="numeric" type="number" min="0" placeholder="Ej. 42" />
+          </div>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+          <button id="btnAddVets" class="btn-primary px-4 py-2 rounded-xl font-medium">Añadir jugadora</button>
+          <button id="btnRecalcVets" class="btn-secondary px-4 py-2 rounded-xl font-medium">Recalcular parejas</button>
+          <button id="btnClearVets" class="btn-danger px-4 py-2 rounded-xl font-medium">Borrar lista</button>
+        </div>
+
+        <div class="text-xs text-slate-500">
+          Nota: si una jugadora no tiene edad, <b>no podrá jugar Veteranas</b> (pero puede seguir en Americanas).
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white border rounded-2xl shadow-sm p-4 lg:col-span-2">
+      <div class="flex items-center justify-between gap-2">
+        <h3 class="text-lg font-semibold">Jugadoras (Veteranas)</h3>
+        <span class="text-sm text-slate-600">Elegibles (con edad): <b id="vEligibleCount">0</b></span>
+      </div>
+
+      <div class="mt-3 overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead>
+            <tr class="text-left text-slate-600 border-b">
+              <th class="py-2 pr-3">Nombre</th>
+              <th class="py-2 pr-3">Posición</th>
+              <th class="py-2 pr-3">Edad</th>
+              <th class="py-2 pr-3"></th>
+            </tr>
+          </thead>
+          <tbody id="vPlayersTbody"></tbody>
+        </table>
+      </div>
+
+      <div class="mt-6 border-t pt-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h3 class="text-lg font-semibold">Parejas generadas</h3>
+          <span class="text-sm text-slate-600">Reglas: 5 partidos, umbrales 75/80/85/90/95</span>
+        </div>
+
+        <div class="mt-3 space-y-3" id="vPairsWrap"></div>
+
+        <div class="mt-3 text-sm text-slate-600" id="vPairsMsg"></div>
+      </div>
+    </div>
+  </div>
+</section>
+0 text-xs text-slate-500">
       Funciona con doble clic en el HTML · Todo se guarda en LocalStorage.
     </footer>
 </div>
@@ -431,7 +506,7 @@ Cris,C" rows="4"></textarea>
      ***********************************************************************/
 
     const STORAGE_KEY = "padel_jornada_manager_v2_courts";
-    let db = { players: [], pairHistory: [], journals: [], currentJournalId: null };
+    let db = { players: [], pairHistory: [], journals: [], currentJournalId: null, veteranasPlayers: [], veteranasPairs: [] };
 
     // ✅ Estado de UI: qué jornada estamos viendo en detalle (no hace falta guardarlo en LocalStorage)
     let selectedJournalId = null;
@@ -760,6 +835,7 @@ function uid(prefix="id") { return prefix + "_" + Math.random().toString(16).sli
       // Render bajo demanda para evitar cálculos innecesarios
       if (name === "ranking") renderRanking();
       if (name === "stats") renderStatsTab();
+      if (name === "veteranas") renderVeteranas();
     }
 
     function renderAll() {
@@ -773,6 +849,7 @@ function uid(prefix="id") { return prefix + "_" + Math.random().toString(16).sli
       renderHistory();
       renderSummary();
       renderJournalDetail();
+      renderVeteranas();
     }
 
     function renderPlayers() {
@@ -2048,6 +2125,243 @@ document.getElementById("fileImport")?.addEventListener("change", async (e) => {
   await importDataFromFile(file);
   // Permite volver a importar el mismo archivo si hace falta
   e.target.value = "";
+});
+
+/***********************************************************************
+ * TAB: VETERANAS (5 parejas por umbrales de edad + posiciones)
+ **********************************************************************/
+const VET_THRESHOLDS = [75, 80, 85, 90, 95];
+
+function sideLabel(s) {
+  return s === "L" ? "Izquierda" : (s === "R" ? "Derecha" : "Comodín");
+}
+
+function getVetsPlayers() {
+  return Array.isArray(db.veteranasPlayers) ? db.veteranasPlayers : (db.veteranasPlayers = []);
+}
+
+function addVetsPlayer() {
+  const name = ($("#vName").value || "").trim();
+  const side = $("#vSide").value;
+  const ageRaw = ($("#vAge").value || "").trim();
+  const age = ageRaw === "" ? null : Number(ageRaw);
+
+  if (!name) { alert("Introduce un nombre."); return; }
+  if (ageRaw !== "" && (!Number.isFinite(age) || age <= 0)) { alert("Edad no válida."); return; }
+
+  const p = { id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(), name, side, age };
+  getVetsPlayers().push(p);
+  // Limpia inputs
+  $("#vName").value = "";
+  $("#vAge").value = "";
+  save();
+}
+
+function deleteVetsPlayer(id) {
+  db.veteranasPlayers = getVetsPlayers().filter(p => p.id !== id);
+  save();
+}
+
+function clearVetsPlayers() {
+  const ok = confirm("¿Borrar la lista de jugadoras para Veteranas?");
+  if (!ok) return;
+  db.veteranasPlayers = [];
+  db.veteranasPairs = [];
+  save();
+}
+
+function eligibleVetsPlayers() {
+  return getVetsPlayers().filter(p => Number.isFinite(p.age) && p.age !== null);
+}
+
+function isValidPair(a, b) {
+  // Reglas de posiciones: una izquierda y una derecha; comodín vale para ambos.
+  const sa = a.side, sb = b.side;
+  const isJ = (s) => s === "J";
+  const isL = (s) => s === "L";
+  const isR = (s) => s === "R";
+  // Posibilidades válidas:
+  // L+R, L+J, J+R, J+J (asignables a L/R)
+  if ((isL(sa) && isR(sb)) || (isR(sa) && isL(sb))) return true;
+  if ((isL(sa) && isJ(sb)) || (isJ(sa) && isL(sb))) return true;
+  if ((isR(sa) && isJ(sb)) || (isJ(sa) && isR(sb))) return true;
+  if (isJ(sa) && isJ(sb)) return true;
+  return false;
+}
+
+function makePairsFromPlayers(players) {
+  const pairs = [];
+  for (let i = 0; i < players.length; i++) {
+    for (let j = i + 1; j < players.length; j++) {
+      const a = players[i], b = players[j];
+      if (!isValidPair(a, b)) continue;
+      const sum = (a.age || 0) + (b.age || 0);
+      pairs.push({ aId: a.id, bId: b.id, sum });
+    }
+  }
+  return pairs;
+}
+
+function solveVeteranas(players, thresholds = VET_THRESHOLDS) {
+  // Backtracking: asigna 5 parejas sin solape cumpliendo umbrales.
+  const byId = new Map(players.map(p => [p.id, p]));
+  const allPairs = makePairsFromPlayers(players);
+
+  // Precompute candidates per threshold (descending for search)
+  const thDesc = [...thresholds].sort((x, y) => y - x);
+  const candidates = new Map();
+  for (const th of thDesc) {
+    const c = allPairs.filter(p => p.sum >= th)
+      .sort((p1, p2) => p1.sum - p2.sum); // prefer mínimos para conservar edades altas
+    candidates.set(th, c);
+  }
+
+  const used = new Set();
+  const chosen = [];
+
+  function rec(k) {
+    if (k === thDesc.length) return true;
+    const th = thDesc[k];
+    const cands = candidates.get(th);
+    for (const pr of cands) {
+      if (used.has(pr.aId) || used.has(pr.bId)) continue;
+      used.add(pr.aId); used.add(pr.bId);
+      chosen.push({ threshold: th, ...pr });
+      if (rec(k + 1)) return true;
+      chosen.pop();
+      used.delete(pr.aId); used.delete(pr.bId);
+    }
+    return false;
+  }
+
+  const ok = rec(0);
+  if (!ok) return { ok: false, pairs: [], reason: "No hay una combinación válida con las edades/posiciones actuales." };
+
+  // Convert to display order ascending threshold 75..95
+  const chosenMap = new Map(chosen.map(x => [x.threshold, x]));
+  const ordered = thresholds.map(th => chosenMap.get(th)).filter(Boolean).map(x => ({
+    threshold: x.threshold,
+    sum: x.sum,
+    a: byId.get(x.aId),
+    b: byId.get(x.bId),
+  }));
+
+  return { ok: true, pairs: ordered };
+}
+
+function recalcVeteranas() {
+  const players = eligibleVetsPlayers();
+  if (players.length < 10) {
+    db.veteranasPairs = [];
+    save();
+    return;
+  }
+  const res = solveVeteranas(players);
+  if (!res.ok) {
+    db.veteranasPairs = [];
+    save();
+    // message handled in render
+    return;
+  }
+  db.veteranasPairs = res.pairs;
+  save();
+}
+
+function renderVeteranas() {
+  // Safeguard if elements not present yet
+  const tbody = document.getElementById("vPlayersTbody");
+  if (!tbody) return;
+
+  const list = getVetsPlayers();
+  const elig = eligibleVetsPlayers();
+  document.getElementById("vEligibleCount").textContent = String(elig.length);
+
+  tbody.innerHTML = list.map(p => {
+    const age = (p.age === null || p.age === undefined || p.age === "") ? "—" : String(p.age);
+    const badge = (p.age === null || p.age === undefined || p.age === "") ? '<span class="text-xs px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">Sin edad (no elegible)</span>' : '';
+    return `
+      <tr class="border-b">
+        <td class="py-2 pr-3 font-medium">${escapeHtml(p.name)}</td>
+        <td class="py-2 pr-3">${sideLabel(p.side)}</td>
+        <td class="py-2 pr-3">${age} ${badge}</td>
+        <td class="py-2 pr-0 text-right">
+          <button class="btn-danger px-3 py-1.5 rounded-lg text-xs font-medium" data-vdel="${p.id}">Eliminar</button>
+        </td>
+      </tr>`;
+  }).join("");
+
+  // bind delete buttons
+  tbody.querySelectorAll("[data-vdel]").forEach(btn => {
+    btn.addEventListener("click", () => deleteVetsPlayer(btn.getAttribute("data-vdel")));
+  });
+
+  // Render pairs
+  const wrap = document.getElementById("vPairsWrap");
+  const msg = document.getElementById("vPairsMsg");
+  wrap.innerHTML = "";
+
+  const pairs = Array.isArray(db.veteranasPairs) ? db.veteranasPairs : [];
+  if (elig.length < 10) {
+    msg.innerHTML = `Necesitas al menos <b>10 jugadoras con edad</b> para generar 5 parejas. Ahora mismo: <b>${elig.length}</b>.`;
+    return;
+  }
+
+  if (!pairs.length) {
+    msg.innerHTML = `No se pudo generar una combinación válida con las jugadoras actuales. Prueba a:
+      <ul class="list-disc ml-5 mt-2">
+        <li>Añadir más jugadoras con edad</li>
+        <li>Revisar posiciones (Izquierda/Derecha/Comodín)</li>
+        <li>Pulsar “Recalcular parejas”</li>
+      </ul>`;
+    return;
+  }
+
+  msg.textContent = "";
+  wrap.innerHTML = pairs.map((p, i) => {
+    const a = p.a, b = p.b;
+    const sum = p.sum;
+    const okBadge = sum >= p.threshold
+      ? '<span class="text-xs px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">OK</span>'
+      : '<span class="text-xs px-2 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200">No cumple</span>';
+    return `
+      <div class="border rounded-2xl p-4 bg-slate-50">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="font-semibold">Pareja ${i + 1} <span class="text-slate-600 font-normal">(≥ ${p.threshold} años)</span></div>
+          <div class="flex items-center gap-2">
+            <div class="text-sm text-slate-700"><b>${sum}</b> años</div>
+            ${okBadge}
+          </div>
+        </div>
+        <div class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+          <div class="bg-white rounded-xl border p-3">
+            <div class="font-medium">${escapeHtml(a.name)}</div>
+            <div class="text-slate-600">${sideLabel(a.side)} · ${a.age} años</div>
+          </div>
+          <div class="bg-white rounded-xl border p-3">
+            <div class="font-medium">${escapeHtml(b.name)}</div>
+            <div class="text-slate-600">${sideLabel(b.side)} · ${b.age} años</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+// Eventos UI Veteranas
+document.getElementById("btnAddVets")?.addEventListener("click", addVetsPlayer);
+document.getElementById("btnRecalcVets")?.addEventListener("click", () => {
+  recalcVeteranas();
+  // Al recalcular, cambia a pestaña veteranas por si el usuario estaba ya ahí (sin saltos)
+  setTab("veteranas");
+});
+document.getElementById("btnClearVets")?.addEventListener("click", clearVetsPlayers);
+
+// Enter para añadir
+document.getElementById("vName")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") addVetsPlayer();
+});
+document.getElementById("vAge")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") addVetsPlayer();
 });
 
 </script>
