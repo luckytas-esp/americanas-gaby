@@ -35,7 +35,7 @@
 <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight flex items-center gap-2"><img src="assets/icons/icon-192.png" alt="Americanas Gaby" class="w-7 h-7 rounded-md"/><span id="appTitleText">Americanas Gaby</span></h1>
 <p class="text-slate-600" id="appSubtitleText">Pistas simultáneas · parejas IZQ–DER · sin repetir parejas · ranking final</p>
 </div>
-<div class="flex gap-2"><button class="px-3 py-2 rounded-xl bg-sky-500 text-white shadow-sm hover:bg-sky-600 text-sm hidden" id="btnInstall">Instalar</button>
+<div class="flex gap-2"><button class="px-3 py-2 rounded-xl bg-sky-500 text-white shadow-sm hover:bg-sky-600 text-sm" id="btnInstall">Instalar</button>
 <button class="px-3 py-2 rounded-xl bg-white border shadow-sm hover:bg-slate-50 text-sm" id="btnImport">Importar (JSON)</button><button class="px-3 py-2 rounded-xl bg-white border shadow-sm hover:bg-slate-50 text-sm" id="btnExport">
           Exportar (JSON)
         </button>
@@ -2202,6 +2202,37 @@ function onTimerFinished() {
  ***********************************************************************/
 let deferredInstallPrompt = null;
 
+function isStandaloneMode(){
+  return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || (window.navigator && window.navigator.standalone === true);
+}
+function openInstallHelp(){
+  const m = document.getElementById('installHelpModal');
+  if (!m) return;
+  m.classList.remove('hidden');
+  m.classList.add('flex');
+}
+function closeInstallHelp(){
+  const m = document.getElementById('installHelpModal');
+  if (!m) return;
+  m.classList.add('hidden');
+  m.classList.remove('flex');
+}
+
+// Mostrar/ocultar botón Instalar según contexto
+window.addEventListener('load', () => {
+  const b = document.getElementById('btnInstall');
+  if (!b) return;
+  if (isStandaloneMode()){
+    b.classList.add('hidden');
+  } else {
+    b.classList.remove('hidden');
+  }
+  document.getElementById('btnCloseInstallHelp')?.addEventListener('click', closeInstallHelp);
+  document.getElementById('installHelpModal')?.addEventListener('click', (e) => {
+    if (e.target && e.target.id === 'installHelpModal') closeInstallHelp();
+  });
+});
+
 window.addEventListener("beforeinstallprompt", (e) => {
   // Android/Chrome: capturamos el evento para mostrar nuestro propio botón
   e.preventDefault();
@@ -2211,7 +2242,10 @@ window.addEventListener("beforeinstallprompt", (e) => {
 });
 
 document.getElementById("btnInstall")?.addEventListener("click", async () => {
-  if (!deferredInstallPrompt) return;
+  if (!deferredInstallPrompt) {
+    openInstallHelp();
+    return;
+  }
   deferredInstallPrompt.prompt();
   try { await deferredInstallPrompt.userChoice; } catch (e) {}
   deferredInstallPrompt = null;
@@ -3086,5 +3120,35 @@ document.getElementById("vAge")?.addEventListener("keydown", (e) => {
 });
 
 </script>
+<!-- Install help modal -->
+<div id="installHelpModal" class="fixed inset-0 hidden items-center justify-center bg-black/50 p-4 z-50">
+  <div class="w-full max-w-lg rounded-2xl bg-white shadow-xl border border-slate-200">
+    <div class="p-4 border-b border-slate-200 flex items-center justify-between">
+      <div class="font-semibold text-slate-900">Cómo instalar en el móvil</div>
+      <button id="btnCloseInstallHelp" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-sm">Cerrar</button>
+    </div>
+    <div class="p-4 space-y-4 text-sm text-slate-700">
+      <div>
+        <div class="font-medium text-slate-900 mb-1">Android (Chrome / Edge)</div>
+        <ul class="list-disc pl-5 space-y-1">
+          <li>Abre esta página en el navegador.</li>
+          <li>Pulsa el menú <b>⋮</b> y selecciona <b>“Instalar aplicación”</b> o <b>“Añadir a pantalla de inicio”</b>.</li>
+          <li>Si aparece un diálogo de instalación, acepta.</li>
+        </ul>
+      </div>
+      <div>
+        <div class="font-medium text-slate-900 mb-1">iPhone (Safari)</div>
+        <ul class="list-disc pl-5 space-y-1">
+          <li>Abre esta página en <b>Safari</b> (no en navegadores embebidos).</li>
+          <li>Pulsa <b>Compartir</b> (cuadrado con flecha).</li>
+          <li>Elige <b>“Añadir a pantalla de inicio”</b>.</li>
+        </ul>
+      </div>
+      <div class="text-slate-500">
+        Nota: algunos navegadores no muestran el “prompt” automático. Este botón te guía igualmente.
+      </div>
+    </div>
+  </div>
+</div>
 </body>
 </html>
